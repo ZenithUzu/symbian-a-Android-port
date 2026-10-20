@@ -1,0 +1,22 @@
+plugins {
+    id 'com.android.library'
+}
+
+// J2ME (MIDP 2.0 / CLDC 1.1 + MMAPI + Nokia/Samsung extensions) implemented on Android.
+android {
+    namespace 'j2a.runtime'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 21
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+    }
+}

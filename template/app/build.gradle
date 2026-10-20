@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace '@@PACKAGE@@'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId '@@PACKAGE@@'
+        minSdk 21
+        targetSdk 35
+        versionCode @@VERSION_CODE@@
+        versionName '@@VERSION_NAME@@'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key so "Build APK" gives an installable file.
+            // Create your own key (Build > Generate Signed Bundle / APK) to publish.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packaging {
+        resources {
+            excludes += ['META-INF/MANIFEST.MF', 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA']
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation project(':j2me-runtime')
+    @@GAME_DEPENDENCY@@
+}

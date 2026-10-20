@@ -1,0 +1,424 @@
+package j2a.core;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Vibrator;
+import android.util.Log;
+import android.view.View;
+import android.widget.FrameLayout;
+
+import java.io.File;
+import java.util.Properties;
+import java.util.Vector;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javax.microedition.lcdui.Alert;
+import javax.microedition.lcdui.Canvas;
+import javax.microedition.lcdui.Command;
+import javax.microedition.lcdui.Displayable;
+import javax.microedition.lcdui.Graphics;
+import javax.microedition.lcdui.Image;
+import javax.microedition.lcdui.Screen;
+import javax.microedition.midlet.MIDlet;
+import javax.microedition.midlet.MIDletAccess;
+
+/**
+ * Glue between the J2ME API implementation and Android. Everything is static
+ * because a J2ME application is a process-wide singleton anyway.
+ */
+public final class Host {
+    private static final String TAG = "j2a";
+
+    public static Config cfg = new Config();
+    public static Properties appProperties = new Properties();
+    static Activity activity;
+    static ScreenView view;
+    static FrameLayout screenContainer;
+    static final Handler ui = new Handler(Looper.getMainLooper());
+    public static final EventQueue events = new EventQueue();
+    private static final ExecutorService lifecycle = Executors.newSingleThreadExecutor();
+
+    static MIDlet midlet;
+    static volatile Displayable current;
+    private static Image screenImage;
+    private static Graphics screenGraphics;
+    static volatile boolean paused;
+    private static boolean started;
+
+    private Host() {}
+
+    // ------------------------------------------------------------------ setup
+
+    static void init(Activity a, Config c, Properties props, ScreenView v, FrameLayout container) {
+        activity = a;
+        cfg = c;
+        appProperties = props;
+        view = v;
+        screenContainer = container;
+        if (screenImage != null) return; // activity re-created, process alive
+        screenImage = Image.createImage(cfg.screenWidth, cfg.screenHeight);
+        screenGraphics = screenImage.getGraphics();
+        System.setProperty("microedition.platform", cfg.platform);
+        System.setProperty("microedition.locale", cfg.locale);
+        System.setProperty("microedition.configuration", "CLDC-1.1");
+        System.setProperty("microedition.profiles", "MIDP-2.0");
+        System.setProperty("microedition.encoding", "UTF-8");
+        System.setProperty("microedition.media.version", "1.1");
+        System.setProperty("supports.mixing", "true");
+        System.setProperty("microedition.commports", "");
+        System.setProperty("microedition.hostname", "localhost");
+        events.start();
+    }
+
+    static void startMIDlet(final String className) {
+        lifecycle.execute(new Runnable() {
+            public void run() {
+                try {
+                    Class<?> cls = Class.forName(className);
+                    midlet = (MIDlet) cls.newInstance();
+                    started = true;
+                    MIDletAccess.startApp(midlet);
+                } catch (Throwable t) {
+                    Log.e(TAG, "Could not start MIDlet " + className, t);
+                    showFatal(t);
+                }
+            }
+        });
+    }
+
+    public static void registerMIDlet(MIDlet m) {
+        midlet = m;
+    }
+
+    public static Activity getActivity() { return activity; }
+
+    public static File filesDir() { return activity.getFilesDir(); }
+
+    public static File cacheDir() { return activity.getCacheDir(); }
+
+    public static void runOnUi(Runnable r) {
+        if (Looper.myLooper() == Looper.getMainLooper()) r.run();
+        else ui.post(r);
+    }
+
+    // -------------------------------------------------------------- lifecycle
+
+    static void onPause() {
+        paused = true;
+        final Displayable d = current;
+        if (d != null) {
+            events.post(new Runnable() { public void run() { d.j2aHideNotify(); } });
+        }
+        javax.microedition.media.Manager.j2aPauseAll();
+        if (started) {
+            lifecycle.execute(new Runnable() {
+                public void run() {
+                    try { MIDletAccess.pauseApp(midlet); } catch (Throwable t) { Log.w(TAG, "pauseApp", t); }
+                }
+            });
+        }
+    }
+
+    static void onResume() {
+        if (!paused) return;
+        paused = false;
+        if (started) {
+            lifecycle.execute(new Runnable() {
+                public void run() {
+                    try { MIDletAccess.startApp(midlet); } catch (Throwable t) { Log.w(TAG, "startApp", t); }
+                }
+            });
+        }
+        javax.microedition.media.Manager.j2aResumeAll();
+        final Displayable d = current;
+        if (d != null) {
+            events.post(new Runnable() { public void run() { d.j2aShowNotify(); } });
+            if (d instanceof Canvas) ((Canvas) d).repaint();
+        }
+    }
+
+    /** Called by MIDlet.notifyDestroyed() or the "Salir" menu entry. */
+    public static void exit() {
+        javax.microedition.media.Manager.j2aCloseAll();
+        events.stop();
+        ui.post(new Runnable() {
+            public void run() {
+                if (activity != null) activity.finish();
+                ui.postDelayed(new Runnable() {
+                    public void run() { android.os.Process.killProcess(android.os.Process.myPid()); }
+                }, 300);
+            }
+        });
+    }
+
+    static void requestExit() {
+        lifecycle.execute(new Runnable() {
+            public void run() {
+                try { if (midlet != null) MIDletAccess.destroyApp(midlet, true); } catch (Throwable ignored) {}
+                exit();
+            }
+        });
+    }
+
+    // ---------------------------------------------------------- displayables
+
+    public static Displayable getCurrent() { return current; }
+
+    public static void setCurrent(final Displayable next) {
+        if (next == null) return;
+        final Displayable prev = current;
+        if (prev == next) {
+            if (next instanceof Canvas) ((Canvas) next).repaint();
+            return;
+        }
+        current = next;
+        if (prev != null) {
+            prev.j2aSetShown(false);
+            events.post(new Runnable() { public void run() { prev.j2aHideNotify(); } });
+        }
+        next.j2aSetShown(true);
+        if (next instanceof Canvas) {
+            runOnUi(new Runnable() {
+                public void run() {
+                    screenContainer.removeAllViews();
+                    screenContainer.setVisibility(View.GONE);
+                    view.requestFocus();
+                    view.redraw();
+                }
+            });
+            events.post(new Runnable() { public void run() { next.j2aShowNotify(); } });
+            ((Canvas) next).repaint();
+        } else {
+            refreshScreen((Screen) next);
+            events.post(new Runnable() { public void run() { next.j2aShowNotify(); } });
+            if (next instanceof Alert) ((Alert) next).j2aStartTimer();
+        }
+    }
+
+    /** Rebuilds the native Android view of a Form/List/TextBox/Alert. */
+    public static void refreshScreen(final Screen s) {
+        if (s != current || activity == null) return;
+        runOnUi(new Runnable() {
+            public void run() {
+                if (s != current) return;
+                screenContainer.removeAllViews();
+                screenContainer.addView(s.j2aCreateView(activity));
+                screenContainer.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    /** Called when commands of the current displayable change. */
+    public static void commandsChanged(Displayable d) {
+        if (d != current) return;
+        if (d instanceof Screen) refreshScreen((Screen) d);
+        else runOnUi(new Runnable() { public void run() { view.redraw(); } });
+    }
+
+    public static void fireCommand(final Displayable d, final Command c) {
+        events.post(new Runnable() { public void run() { d.j2aFireCommand(c); } });
+    }
+
+    // ----------------------------------------------------------- painting
+
+    static void paintCanvas(Canvas c) {
+        synchronized (screenImage) {
+            screenGraphics.j2aReset();
+            try {
+                c.j2aPaint(screenGraphics);
+            } catch (Throwable t) {
+                Log.e(TAG, "Exception in paint()", t);
+            }
+        }
+        present(screenImage.j2aBitmap());
+    }
+
+    /** Shows a finished frame (screen bitmap or GameCanvas buffer). */
+    public static void present(Bitmap frame) {
+        ScreenView v = view;
+        if (v != null && !paused) v.present(frame);
+    }
+
+    // --------------------------------------------------------------- input
+
+    /** type: 0 = pressed, 1 = released, 2 = repeated */
+    static void key(final int type, final int keyCode) {
+        final Displayable d = current;
+        if (d instanceof Canvas) {
+            final Canvas c = (Canvas) d;
+            if (type == 0 && (keyCode == Keys.SOFT_LEFT || keyCode == Keys.SOFT_RIGHT)) {
+                if (handleSoftKey(c, keyCode)) return;
+            }
+            events.post(new Runnable() { public void run() { c.j2aKey(type, keyCode); } });
+        } else if (d != null && type == 0 && keyCode == Keys.SOFT_RIGHT) {
+            Command back = d.j2aBackCommand();
+            if (back != null) fireCommand(d, back);
+        }
+    }
+
+    private static boolean handleSoftKey(Canvas c, int keyCode) {
+        if (!c.j2aCommandsUseSoftKeys()) return false;
+        if (keyCode == Keys.SOFT_RIGHT) {
+            Command back = c.j2aBackCommand();
+            if (back == null) return false;
+            fireCommand(c, back);
+            return true;
+        }
+        Vector<Command> left = c.j2aLeftCommands();
+        if (left.isEmpty()) return false;
+        if (left.size() == 1) fireCommand(c, left.elementAt(0));
+        else showCommandMenu(c, left);
+        return true;
+    }
+
+    static void pointer(final int type, final int x, final int y) {
+        final Displayable d = current;
+        if (!(d instanceof Canvas)) return;
+        final Canvas c = (Canvas) d;
+        events.post(new Runnable() { public void run() { c.j2aPointer(type, x, y); } });
+    }
+
+    static String softLabel(boolean left) {
+        Displayable d = current;
+        if (!(d instanceof Canvas)) return null;
+        Canvas c = (Canvas) d;
+        if (!c.j2aCommandsUseSoftKeys()) return null;
+        if (!left) {
+            Command b = c.j2aBackCommand();
+            return b == null ? null : b.getLabel();
+        }
+        Vector<Command> l = c.j2aLeftCommands();
+        if (l.isEmpty()) return null;
+        return l.size() == 1 ? l.elementAt(0).getLabel() : "Opciones";
+    }
+
+    static void backPressed() {
+        if ("menu".equals(cfg.backAction)) {
+            showPortMenu();
+            return;
+        }
+        Displayable d = current;
+        if (d instanceof Canvas) {
+            key(0, Keys.SOFT_RIGHT);
+            key(1, Keys.SOFT_RIGHT);
+        } else if (d != null) {
+            Command back = d.j2aBackCommand();
+            if (back != null) fireCommand(d, back);
+            else showPortMenu();
+        }
+    }
+
+    // ------------------------------------------------------------- dialogs
+
+    static void showCommandMenu(final Displayable d, final Vector<Command> cmds) {
+        runOnUi(new Runnable() {
+            public void run() {
+                String[] items = new String[cmds.size()];
+                for (int i = 0; i < items.length; i++) items[i] = cmds.elementAt(i).getLabel();
+                new AlertDialog.Builder(activity)
+                        .setItems(items, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dlg, int which) {
+                                fireCommand(d, cmds.elementAt(which));
+                            }
+                        })
+                        .show();
+            }
+        });
+    }
+
+    static void showPortMenu() {
+        runOnUi(new Runnable() {
+            public void run() {
+                final String[] items = {
+                        "Teclado virtual: " + cfg.keypad,
+                        "Escalado: " + cfg.scaleMode,
+                        "Filtro suave: " + (cfg.filter ? "sí" : "no"),
+                        "Mostrar FPS: " + (cfg.showFps ? "sí" : "no"),
+                        "Límite de FPS: " + (cfg.fpsLimit == 0 ? "sin límite" : String.valueOf(cfg.fpsLimit)),
+                        "Sonido: " + (cfg.sound ? "sí" : "no"),
+                        "Salir del juego"
+                };
+                new AlertDialog.Builder(activity)
+                        .setTitle("Menú del port")
+                        .setItems(items, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dlg, int which) {
+                                switch (which) {
+                                    case 0: cfg.keypad = next(cfg.keypad, "full", "minimal", "none"); break;
+                                    case 1: cfg.scaleMode = next(cfg.scaleMode, "fit", "integer", "stretch"); break;
+                                    case 2: cfg.filter = !cfg.filter; break;
+                                    case 3: cfg.showFps = !cfg.showFps; break;
+                                    case 4: cfg.fpsLimit = cfg.fpsLimit == 0 ? 30 : cfg.fpsLimit == 30 ? 60 : 0; break;
+                                    case 5:
+                                        cfg.sound = !cfg.sound;
+                                        if (!cfg.sound) javax.microedition.media.Manager.j2aPauseAll();
+                                        break;
+                                    case 6: requestExit(); return;
+                                }
+                                Settings.save(activity, cfg);
+                                view.relayout();
+                            }
+                        })
+                        .show();
+            }
+        });
+    }
+
+    private static String next(String cur, String... values) {
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(cur)) return values[(i + 1) % values.length];
+        }
+        return values[0];
+    }
+
+    static void showFatal(final Throwable t) {
+        runOnUi(new Runnable() {
+            public void run() {
+                new AlertDialog.Builder(activity)
+                        .setTitle("Error al iniciar el juego")
+                        .setMessage(String.valueOf(t))
+                        .setPositiveButton("Salir", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int w) { exit(); }
+                        })
+                        .show();
+            }
+        });
+    }
+
+    // ------------------------------------------------------------- platform
+
+    public static boolean vibrate(int ms) {
+        if (!cfg.vibration || activity == null) return false;
+        try {
+            Vibrator v = (Vibrator) activity.getSystemService(Activity.VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return false;
+            if (ms <= 0) v.cancel();
+            else v.vibrate(ms);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    public static boolean platformRequest(String url) {
+        if (url == null || url.length() == 0) return false;
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(i);
+        } catch (Throwable t) {
+            Log.w(TAG, "platformRequest failed: " + url, t);
+        }
+        return false;
+    }
+
+    public static String getAppProperty(String key) {
+        return appProperties.getProperty(key);
+    }
+}

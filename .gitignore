@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.idea/
+.gradle/
+build/
+local.properties
+*-android/
+samples/demo-midlet/demo.jar
+samples/demo-midlet/demo.jad
+.DS_Store
