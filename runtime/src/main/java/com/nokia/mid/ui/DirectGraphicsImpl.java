@@ -10,6 +10,8 @@ import javax.microedition.lcdui.Image;
 
 final class DirectGraphicsImpl implements DirectGraphics {
     private final Graphics g;
+    private final Matrix m = new Matrix();
+    private final RectF bounds = new RectF();
 
     DirectGraphicsImpl(Graphics g) {
         this.g = g;
@@ -34,12 +36,12 @@ final class DirectGraphicsImpl implements DirectGraphics {
 
     private void drawBitmap(Bitmap b, int x, int y, int anchor, int manipulation) {
         int w = b.getWidth(), h = b.getHeight();
-        Matrix m = new Matrix();
+        m.reset();
         if ((manipulation & FLIP_HORIZONTAL) != 0) m.postScale(-1, 1, w / 2f, h / 2f);
         if ((manipulation & FLIP_VERTICAL) != 0) m.postScale(1, -1, w / 2f, h / 2f);
         int rot = manipulation & ~(FLIP_HORIZONTAL | FLIP_VERTICAL);
         if (rot != 0) m.postRotate(-rot, w / 2f, h / 2f); // Nokia rotates counter-clockwise
-        RectF bounds = new RectF(0, 0, w, h);
+        bounds.set(0, 0, w, h);
         m.mapRect(bounds);
         m.postTranslate(-bounds.left, -bounds.top);
         int bw = Math.round(bounds.width()), bh = Math.round(bounds.height());

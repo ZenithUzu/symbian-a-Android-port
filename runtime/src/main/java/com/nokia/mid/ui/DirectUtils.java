@@ -5,7 +5,8 @@ import javax.microedition.lcdui.Image;
 
 public class DirectUtils {
     public static DirectGraphics getDirectGraphics(Graphics g) {
-        return new DirectGraphicsImpl(g);
+        if (!(g.j2aDirect instanceof DirectGraphicsImpl)) g.j2aDirect = new DirectGraphicsImpl(g);
+        return (DirectGraphics) g.j2aDirect;
     }
 
     public static Image createImage(byte[] imageData, int imageOffset, int imageLength) {

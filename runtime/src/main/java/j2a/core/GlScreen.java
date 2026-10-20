@@ -38,6 +38,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     private Canvas stagingCanvas;
     private boolean dirty, pending;
     private final Rect dst = new Rect();
+    private final Rect drawRect = new Rect();
     private int viewW, viewH;
 
     private int program, texture = -1, texW, texH;
@@ -167,7 +168,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         GLES20.glClearColor(0, 0, 0, 1);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
         if (!Host.cfg.shader.equals(loadedShader)) loadShader(Host.cfg.shader);
-        Rect r = new Rect();
+        Rect r = drawRect;
         synchronized (lock) {
             r.set(dst);
             if (staging == null) {

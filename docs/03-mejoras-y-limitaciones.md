@@ -39,6 +39,18 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Fuentes nítidas y escalables | `font.small/medium/large`, `text.antialias` |
 | Valor de `microedition.platform` (algunos juegos cambian el control según el modelo) | `microedition.platform` |
 
+## Rendimiento
+
+- El código del juego no se interpreta: Android (ART) lo compila a código máquina, igual que haría
+  un compilador de C++. Traducirlo a C++ no lo haría más rápido; los tirones venían del motor:
+  - **Sonidos**: preparar un `MediaPlayer` tarda decenas de ms y antes congelaba el juego cada vez
+    que sonaba un efecto. Ahora todo el audio va en su propio hilo.
+  - **Basura por frame**: `drawRegion` con giro, `drawRGB` y `DirectGraphics` creaban objetos en cada
+    llamada (pausas del recolector = tirones). Ahora reutilizan los suyos.
+  - **APK de depuración**: un APK "debuggable" corre más lento en Android. La plantilla genera el
+    APK de depuración sin modo depuración (cámbialo a `true` en `app/build.gradle` solo para usar
+    breakpoints).
+
 ## Android 16/17 (targetSdk 37)
 
 - En tablets y plegables (ancho ≥ 600dp) Android 17 ignora el bloqueo de orientación y de proporción.

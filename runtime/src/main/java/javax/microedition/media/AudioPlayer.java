@@ -1,10 +1,14 @@
 package javax.microedition.media;
 
 import android.media.MediaPlayer;
+import android.util.Log;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import j2a.core.Host;
 
@@ -13,7 +17,7 @@ final class AudioPlayer extends BasePlayer {
     private final byte[] data;
     private final String url;
     private String path;
-    private MediaPlayer mp;
+    private volatile MediaPlayer mp;
     private int loopsLeft;
 
     AudioPlayer(byte[] data, String type) {
@@ -69,22 +73,44 @@ final class AudioPlayer extends BasePlayer {
         }
     }
 
-    @Override
-    void doPrefetch() throws MediaException {
+    /**
+     * All MediaPlayer work runs on one audio thread. MediaPlayer.prepare() takes tens of ms;
+     * done on the game thread (many games create or restart a Player for every sound effect)
+     * it froze the game for a moment each time a sound played.
+     */
+    private static final ExecutorService AUDIO = Executors.newSingleThreadExecutor(new ThreadFactory() {
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r, "j2a-audio");
+            t.setDaemon(true);
+            return t;
+        }
+    });
+
+    /** Audio thread only. */
+    private void prepareNow() {
+        if (mp != null) return;
+        MediaPlayer m = new MediaPlayer();
         try {
-            mp = new MediaPlayer();
-            mp.setDataSource(path != null ? path : url);
-            mp.prepare();
-            mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                public void onCompletion(MediaPlayer m) { completed(); }
+            m.setDataSource(path != null ? path : url);
+            m.prepare();
+            m.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                public void onCompletion(MediaPlayer x) {
+                    AUDIO.execute(new Runnable() { public void run() { completed(); } });
+                }
             });
+            mp = m;
         } catch (Exception e) {
-            if (mp != null) mp.release();
-            mp = null;
-            throw new MediaException("Cannot play " + contentType + ": " + e);
+            m.release();
+            Log.w("j2a", "Cannot play " + contentType + ": " + e);
         }
     }
 
+    @Override
+    void doPrefetch() {
+        AUDIO.execute(new Runnable() { public void run() { prepareNow(); } });
+    }
+
+    /** Audio thread only. */
     private void completed() {
         MediaPlayer m = mp;
         if (m == null) return;
@@ -98,35 +124,64 @@ final class AudioPlayer extends BasePlayer {
     }
 
     @Override
-    void doStart() throws MediaException {
-        if (mp == null) doPrefetch();
-        loopsLeft = loopCount;
-        mp.setLooping(loopCount < 0);
-        mp.start();
+    void doStart() {
+        final int loops = loopCount;
+        AUDIO.execute(new Runnable() {
+            public void run() {
+                prepareNow();
+                MediaPlayer m = mp;
+                if (m == null) {
+                    endOfMedia(); // unsupported file: behave like a sound that already ended
+                    return;
+                }
+                loopsLeft = loops;
+                m.setLooping(loops < 0);
+                float v = volume();
+                m.setVolume(v, v);
+                m.start();
+            }
+        });
     }
 
     @Override
     void doStop() {
-        if (mp != null && mp.isPlaying()) mp.pause();
+        AUDIO.execute(new Runnable() {
+            public void run() {
+                MediaPlayer m = mp;
+                if (m != null && m.isPlaying()) m.pause();
+            }
+        });
     }
 
     @Override
     void doDeallocate() {
-        if (mp != null) {
-            mp.release();
-            mp = null;
-        }
+        AUDIO.execute(new Runnable() {
+            public void run() {
+                if (mp != null) {
+                    mp.release();
+                    mp = null;
+                }
+            }
+        });
     }
 
     @Override
-    void applyVolume(float v) {
-        if (mp != null) mp.setVolume(v, v);
+    void applyVolume(final float v) {
+        AUDIO.execute(new Runnable() {
+            public void run() {
+                if (mp != null) mp.setVolume(v, v);
+            }
+        });
     }
 
-    public long setMediaTime(long now) throws MediaException {
-        if (mp == null) return 0;
-        mp.seekTo((int) (Math.max(0, now) / 1000));
-        return getMediaTime();
+    public long setMediaTime(long now) {
+        final int ms = (int) (Math.max(0, now) / 1000);
+        AUDIO.execute(new Runnable() {
+            public void run() {
+                if (mp != null) mp.seekTo(ms);
+            }
+        });
+        return now;
     }
 
     public long getMediaTime() {

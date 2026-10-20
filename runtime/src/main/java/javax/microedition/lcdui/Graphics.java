@@ -36,6 +36,13 @@ public class Graphics {
     private final Rect srcRect = new Rect();
     private final RectF rf = new RectF();
     private final Path path = new Path();
+    private final Matrix regionMatrix = new Matrix();
+    private final Rect regionSrc = new Rect();
+    private final RectF regionDst = new RectF();
+    private int[] rgbBuf;
+    private Bitmap rgbBitmap;
+    /** Cached Nokia DirectGraphics for this Graphics (games ask for it every frame). */
+    public Object j2aDirect;
 
     private int tx, ty;
     private int cx, cy, cw, ch;
@@ -344,13 +351,19 @@ public class Graphics {
             canvas.drawBitmap(src.bitmap, srcRect, rf, bmp);
             return;
         }
-        drawRegionOn(canvas, src.bitmap, xSrc, ySrc, width, height, transform, x, y, bmp);
+        regionMatrix.reset();
+        transformMatrix(regionMatrix, transform, width, height);
+        regionSrc.set(xSrc, ySrc, xSrc + width, ySrc + height);
+        regionDst.set(0, 0, width, height);
+        canvas.save();
+        canvas.translate(x, y);
+        canvas.concat(regionMatrix);
+        canvas.drawBitmap(src.bitmap, regionSrc, regionDst, bmp);
+        canvas.restore();
     }
 
-    /** Draws a transformed region with its top-left corner at (dx, dy). */
-    static void drawRegionOn(Canvas c, Bitmap src, int xs, int ys, int w, int h, int transform,
-                             int dx, int dy, Paint p) {
-        Matrix m = new Matrix();
+    /** MIDP Sprite transform for a w x h region whose result starts at (0,0). */
+    static void transformMatrix(Matrix m, int transform, int w, int h) {
         switch (transform) {
             case 2: m.postScale(-1, 1); m.postTranslate(w, 0); break;                 // MIRROR
             case 3: m.postRotate(180); m.postTranslate(w, h); break;                  // ROT180
@@ -361,6 +374,13 @@ public class Graphics {
             case 4: m.postScale(-1, 1); m.postTranslate(w, 0); m.postRotate(270); m.postTranslate(0, w); break;
             default: break;
         }
+    }
+
+    /** Draws a transformed region with its top-left corner at (dx, dy). */
+    static void drawRegionOn(Canvas c, Bitmap src, int xs, int ys, int w, int h, int transform,
+                             int dx, int dy, Paint p) {
+        Matrix m = new Matrix();
+        transformMatrix(m, transform, w, h);
         c.save();
         c.translate(dx, dy);
         c.concat(m);
@@ -368,26 +388,26 @@ public class Graphics {
         c.restore();
     }
 
-    @SuppressWarnings("deprecation")
     public void drawRGB(int[] rgbData, int offset, int scanlength, int x, int y, int width, int height,
                         boolean processAlpha) {
         if (rgbData == null) throw new NullPointerException();
         if (width <= 0 || height <= 0) return;
-        int[] data = rgbData;
-        int off = offset, stride = scanlength;
-        if (!processAlpha || scanlength < width) {
-            data = new int[width * height];
-            for (int row = 0; row < height; row++) {
-                int s = offset + row * scanlength, d = row * width;
-                for (int col = 0; col < width; col++) {
-                    int px = rgbData[s + col];
-                    data[d + col] = processAlpha ? px : (px | 0xFF000000);
-                }
+        int n = width * height;
+        if (rgbBuf == null || rgbBuf.length < n) rgbBuf = new int[n];
+        for (int row = 0; row < height; row++) {
+            int s = offset + row * scanlength, d = row * width;
+            if (processAlpha) {
+                System.arraycopy(rgbData, s, rgbBuf, d, width);
+            } else {
+                for (int col = 0; col < width; col++) rgbBuf[d + col] = rgbData[s + col] | 0xFF000000;
             }
-            off = 0;
-            stride = width;
         }
-        canvas.drawBitmap(data, off, stride, x + tx, y + ty, width, height, true, bmp);
+        if (rgbBitmap == null || rgbBitmap.getWidth() != width || rgbBitmap.getHeight() != height) {
+            if (rgbBitmap != null) rgbBitmap.recycle();
+            rgbBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        }
+        rgbBitmap.setPixels(rgbBuf, 0, width, 0, 0, width, height);
+        canvas.drawBitmap(rgbBitmap, x + tx, y + ty, bmp);
         if (track) j2aMark(x + tx, y + ty, x + tx + width, y + ty + height);
     }
 
