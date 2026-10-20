@@ -41,9 +41,11 @@ def official_package(suite, midlet_class):
         segs = pkg.split(".")
         if len(segs) >= 2 and all(re.match(r"^[a-z][a-z0-9_]{1,}$", x) and x not in JAVA_KEYWORDS for x in segs) \
                 and not pkg.startswith(("javax.", "java.", "com.nokia.", "com.sun.")):
-            # 'com.glu' alone would be shared by every game of that publisher (same app id = one
-            # replaces the other on the phone), so add the game name
-            return pkg if len(segs) >= 3 else pkg + "." + (_segment(suite.name) or "game")
+            # Publishers reuse one package for all their games ('com.glu', EA's 'com.ea.sdk'):
+            # same app id = installing one game replaces the other. Add the game name unless
+            # the package already names it (com.sega.sonic for "Sonic Unleashed").
+            name = _segment(suite.name) or "game"
+            return pkg if segs[-1] in name or name in segs[-1] else pkg + "." + name
     vendor = _segment(suite.vendor, 1)
     if len(vendor) <= 2:
         vendor = _segment(suite.vendor, 2)
