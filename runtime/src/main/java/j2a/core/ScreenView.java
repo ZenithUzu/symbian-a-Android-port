@@ -168,7 +168,8 @@ public class ScreenView extends View {
 
     private void fit(int ax, int ay, int aw, int ah) {
         Config c = Host.cfg;
-        int sw = c.screenWidth, sh = c.screenHeight;
+        Rect area = AutoFit.area();
+        int sw = area.width(), sh = area.height();
         aw -= ax;
         ah -= ay;
         int w, h;
@@ -328,13 +329,15 @@ public class ScreenView extends View {
 
     private int vx(float x) {
         int w = Math.max(1, dst.width());
-        int v = (int) ((x - dst.left) * Host.cfg.screenWidth / w);
-        return Math.max(0, Math.min(Host.cfg.screenWidth - 1, v));
+        Rect a = AutoFit.area();
+        int v = a.left + (int) ((x - dst.left) * a.width() / w);
+        return Math.max(a.left, Math.min(a.right - 1, v));
     }
 
     private int vy(float y) {
         int h = Math.max(1, dst.height());
-        int v = (int) ((y - dst.top) * Host.cfg.screenHeight / h);
-        return Math.max(0, Math.min(Host.cfg.screenHeight - 1, v));
+        Rect a = AutoFit.area();
+        int v = a.top + (int) ((y - dst.top) * a.height() / h);
+        return Math.max(a.top, Math.min(a.bottom - 1, v));
     }
 }

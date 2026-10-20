@@ -9,6 +9,8 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 
+import j2a.core.AutoFit;
+
 /**
  * MIDP Graphics implemented on top of android.graphics.Canvas.
  * Translation and clipping are tracked by hand so that J2ME semantics
@@ -41,6 +43,8 @@ public class Graphics {
     private int strokeStyle = SOLID;
     private Font font;
     private int saveCount;
+    /** Reports drawn areas to Host (only the game screen / GameCanvas buffer does). */
+    private boolean track;
 
     Graphics(Bitmap target) {
         this.target = target;
@@ -179,6 +183,7 @@ public class Graphics {
 
     public void drawLine(int x1, int y1, int x2, int y2) {
         x1 += tx; x2 += tx; y1 += ty; y2 += ty;
+        if (track) j2aMark(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2) + 1, Math.max(y1, y2) + 1);
         if (strokeStyle == SOLID && x1 == x2) {
             canvas.drawRect(x1, Math.min(y1, y2), x1 + 1, Math.max(y1, y2) + 1, fill);
         } else if (strokeStyle == SOLID && y1 == y2) {
@@ -194,6 +199,7 @@ public class Graphics {
         x += tx;
         y += ty;
         canvas.drawRect(x, y, x + width, y + height, fill);
+        if (track) j2aMark(x, y, x + width, y + height);
     }
 
     public void drawRect(int x, int y, int width, int height) {
@@ -201,6 +207,7 @@ public class Graphics {
         if (strokeStyle == DOTTED) {
             rf.set(x + tx + 0.5f, y + ty + 0.5f, x + tx + width + 0.5f, y + ty + height + 0.5f);
             canvas.drawRect(rf, stroke);
+            markF(rf);
             return;
         }
         if (width == 0 || height == 0) {
@@ -217,12 +224,14 @@ public class Graphics {
         if (width < 0 || height < 0) return;
         rf.set(x + tx + 0.5f, y + ty + 0.5f, x + tx + width + 0.5f, y + ty + height + 0.5f);
         canvas.drawRoundRect(rf, Math.abs(arcWidth) / 2f, Math.abs(arcHeight) / 2f, stroke);
+        markF(rf);
     }
 
     public void fillRoundRect(int x, int y, int width, int height, int arcWidth, int arcHeight) {
         if (width <= 0 || height <= 0) return;
         rf.set(x + tx, y + ty, x + tx + width, y + ty + height);
         canvas.drawRoundRect(rf, Math.abs(arcWidth) / 2f, Math.abs(arcHeight) / 2f, fill);
+        markF(rf);
     }
 
     public void fillArc(int x, int y, int width, int height, int startAngle, int arcAngle) {
@@ -230,6 +239,7 @@ public class Graphics {
         rf.set(x + tx, y + ty, x + tx + width, y + ty + height);
         if (Math.abs(arcAngle) >= 360) canvas.drawOval(rf, fill);
         else canvas.drawArc(rf, -startAngle, -arcAngle, true, fill);
+        markF(rf);
     }
 
     public void drawArc(int x, int y, int width, int height, int startAngle, int arcAngle) {
@@ -237,6 +247,7 @@ public class Graphics {
         rf.set(x + tx + 0.5f, y + ty + 0.5f, x + tx + width + 0.5f, y + ty + height + 0.5f);
         if (Math.abs(arcAngle) >= 360) canvas.drawOval(rf, stroke);
         else canvas.drawArc(rf, -startAngle, -arcAngle, false, stroke);
+        markF(rf);
     }
 
     public void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3) {
@@ -246,6 +257,7 @@ public class Graphics {
         path.lineTo(x3 + tx, y3 + ty);
         path.close();
         canvas.drawPath(path, fill);
+        markPath();
     }
 
     /** Used by Nokia DirectGraphics. */
@@ -256,6 +268,7 @@ public class Graphics {
         for (int i = 1; i < n; i++) path.lineTo(xs[xOff + i] + tx + (filled ? 0 : 0.5f), ys[yOff + i] + ty + (filled ? 0 : 0.5f));
         path.close();
         canvas.drawPath(path, filled ? fill : stroke);
+        markPath();
     }
 
     // ------------------------------------------------------------------- text
@@ -292,6 +305,10 @@ public class Graphics {
         else if ((anchor & VCENTER) != 0) baseline = y - font.getHeight() / 2 + font.getBaselinePosition();
         else baseline = y + font.getBaselinePosition();
         canvas.drawText(s, start, end, x, baseline, text);
+        if (track && AutoFit.tracking) {
+            j2aMark(x, baseline - font.getBaselinePosition(), x + Math.round(text.measureText(s, start, end)),
+                    baseline + font.getDescent());
+        }
     }
 
     // ----------------------------------------------------------------- images
@@ -306,6 +323,7 @@ public class Graphics {
         if ((anchor & VCENTER) != 0) y -= b.getHeight() / 2;
         else if ((anchor & BOTTOM) != 0) y -= b.getHeight();
         canvas.drawBitmap(b, x, y, bmp);
+        if (track) j2aMark(x, y, x + b.getWidth(), y + b.getHeight());
     }
 
     public void drawRegion(Image src, int xSrc, int ySrc, int width, int height, int transform,
@@ -319,6 +337,7 @@ public class Graphics {
         else if ((anchor & RIGHT) != 0) x -= dw;
         if ((anchor & VCENTER) != 0) y -= dh / 2;
         else if ((anchor & BOTTOM) != 0) y -= dh;
+        if (track) j2aMark(x, y, x + dw, y + dh);
         if (transform == 0) {
             srcRect.set(xSrc, ySrc, xSrc + width, ySrc + height);
             rf.set(x, y, x + width, y + height);
@@ -369,6 +388,7 @@ public class Graphics {
             stride = width;
         }
         canvas.drawBitmap(data, off, stride, x + tx, y + ty, width, height, true, bmp);
+        if (track) j2aMark(x + tx, y + ty, x + tx + width, y + ty + height);
     }
 
     public void copyArea(int xSrc, int ySrc, int width, int height, int xDest, int yDest, int anchor) {
@@ -383,9 +403,34 @@ public class Graphics {
         if ((anchor & VCENTER) != 0) y -= h / 2;
         else if ((anchor & BOTTOM) != 0) y -= h;
         canvas.drawBitmap(part, x, y, bmp);
+        if (track) j2aMark(x, y, x + w, y + h);
     }
 
     // ------------------------------------------------------- j2a extensions
+
+    /** Marks this Graphics as drawing to the visible game screen. */
+    public void j2aTrack() { track = true; }
+
+    /** Reports a drawn area (device coords) for automatic resolution detection. */
+    public void j2aMark(int l, int t, int r, int b) {
+        if (!track || !AutoFit.tracking) return;
+        l = Math.max(l, cx);
+        t = Math.max(t, cy);
+        r = Math.min(r, cx + cw);
+        b = Math.min(b, cy + ch);
+        if (r <= l || b <= t) return;
+        AutoFit.drawn(l, t, r, b, target.getWidth(), target.getHeight());
+    }
+
+    private void markF(RectF r) {
+        if (track) j2aMark((int) Math.floor(r.left), (int) Math.floor(r.top), (int) Math.ceil(r.right), (int) Math.ceil(r.bottom));
+    }
+
+    private void markPath() {
+        if (!track) return;
+        path.computeBounds(rf, true);
+        markF(rf);
+    }
 
     public Canvas j2aCanvas() { return canvas; }
 

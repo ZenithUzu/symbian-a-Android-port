@@ -25,7 +25,9 @@ public abstract class GameCanvas extends Canvas {
     }
 
     protected Graphics getGraphics() {
-        return buffer.getGraphics();
+        Graphics g = buffer.getGraphics();
+        g.j2aTrack();
+        return g;
     }
 
     public int getKeyStates() {

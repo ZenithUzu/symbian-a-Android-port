@@ -6,9 +6,43 @@ import zipfile
 from collections import Counter
 
 COMMON_SCREENS = [
-    (128, 128), (128, 160), (176, 208), (176, 220), (208, 208), (240, 320), (320, 240),
+    (128, 128), (128, 160), (132, 176), (176, 208), (176, 220), (208, 208), (240, 320), (320, 240),
     (352, 416), (240, 400), (400, 240), (360, 640), (640, 360), (320, 480), (480, 320), (480, 800),
 ]
+
+# Phone models / platform names often found in JAR/JAD names ("Juego_N95.jar", "s60v3").
+DEVICE_SCREENS = [
+    (128, 128, "3100 3200 3220 3300 5100 5140 6020 6100 6220 6230 6610 7210 7250 2600"),
+    (128, 160, "6101 6103 6070 6080 6085 2610 2626 2630 2760 3110c 5070 5200 7360 k310 k510 s40v2"),
+    (176, 208, "3230 3650 3660 6260 6600 6620 6630 6670 6680 6681 7610 7650 n70 n72 ngage n-gage qd s60v2"),
+    (176, 220, "k700 k750 w800 w810 k610 w550 w700 z520"),
+    (208, 208, "6230i 6822 7270 8800"),
+    (240, 320, "n73 n76 n77 n78 n79 n81 n82 n85 n86 n95 n96 e65 e66 5310 5320 5610 5630 5700 6120 6121 "
+               "6124 6210 6290 6300 6303 6500 6700 2700 3120 k800 w580 w910 k850 s60v3 s40v5 s40v6"),
+    (320, 240, "e61 e62 e63 e71 e72 e5 c3"),
+    (352, 416, "n80 n90 n92 e60 e70"),
+    (360, 640, "5800 5230 5530 n97 n8 x6 c6 c7 s60v5 symbian3 anna belle"),
+]
+
+
+def int_constants(code_bytes, ranges, cp):
+    """Integer literals used in the methods of a class (bipush/sipush/ldc of an Integer)."""
+    import struct as _s
+    from .classfile import _walk
+    out = set()
+    for start, length in ranges:
+        for pc, op in _walk(code_bytes, start, length):
+            p = start + pc
+            if op == 0x10:
+                out.add(_s.unpack(">b", code_bytes[p + 1:p + 2])[0])
+            elif op == 0x11:
+                out.add(_s.unpack(">h", code_bytes[p + 1:p + 3])[0])
+            elif op in (0x12, 0x13):
+                idx = code_bytes[p + 1] if op == 0x12 else _s.unpack(">H", code_bytes[p + 1:p + 3])[0]
+                e = cp[idx] if idx < len(cp) else None
+                if e and e[0] == 3:
+                    out.add(_s.unpack(">i", e[1])[0])
+    return out
 
 
 def parse_attributes(text):
@@ -113,7 +147,7 @@ class MidletSuite:
 
     # --------------------------------------------------------------- screens
     def screen_hints(self):
-        """Returns a list of (width, height, reason) ordered by confidence."""
+        """Returns a list of (width, height, reason), most reliable first."""
         hints = []
         for key in ("Nokia-MIDlet-Original-Display-Size", "Nokia-MIDlet-Target-Display-Size",
                     "MIDlet-Screen-Size", "J2A-Screen-Size"):
@@ -122,24 +156,69 @@ class MidletSuite:
                 m = re.search(r"(\d{2,4})\s*[,x*]\s*(\d{2,4})", v)
                 if m:
                     hints.append((int(m.group(1)), int(m.group(2)), key))
-        base = os.path.basename(self.jar_path)
-        m = re.search(r"(?<!\d)(\d{3})\s*[xX*_-]\s*(\d{3})(?!\d)", base)
+        names = [os.path.basename(self.jar_path)] + ([os.path.basename(self.jad_path)] if self.jad_path else [])
+        names += [self.attrs.get(k, "") for k in ("MIDlet-Jar-URL", "MIDlet-Name", "MIDlet-Description")]
+        text = " ".join(names).lower()
+        m = re.search(r"(?<!\d)(\d{3})\s*[x*_-]\s*(\d{3})(?!\d)", text)
         if m:
             w, h = int(m.group(1)), int(m.group(2))
             if 96 <= w <= 1024 and 96 <= h <= 1024:
                 hints.append((w, h, "nombre del archivo"))
-        sizes = Counter()
+        squashed = re.sub(r"[\s_.]+", "", text)
+        for w, h, models in DEVICE_SCREENS:
+            for model in models.split():
+                pat = r"(?<![a-z0-9])%s(?![0-9])" % re.escape(model)
+                if re.search(pat, text) or (len(model) > 4 and re.search(pat, squashed)):
+                    hints.append((w, h, "modelo de teléfono '%s'" % model))
+                    break
+        png_screens, widths = self.png_stats()
+        for (w, h), n in png_screens.most_common(2):
+            hints.append((w, h, "%d imagen(es) del tamaño de pantalla" % n))
+        pair = self.bytecode_screen()
+        if pair:
+            w, h, n = pair
+            if (w, h) != (h, w) and widths[h] > widths[w]:
+                w, h = h, w  # more images as wide as the long side -> landscape
+            hints.append((w, h, "constantes %dx%d en %d clase(s) del código" % (w, h, n)))
+        return hints
+
+    def png_stats(self):
+        """(Counter of screen-sized PNGs, Counter of PNG widths)."""
+        screens, widths = Counter(), Counter()
         for e in self.entries:
             if e.filename.lower().endswith(".png") and e.file_size < 400000:
                 try:
                     s = png_size(self.zip.read(e.filename)[:32])
-                except Exception:
+                except Exception:  # noqa: BLE001 - broken image entries happen
                     s = None
-                if s and s in COMMON_SCREENS:
-                    sizes[s] += 1
-        for (w, h), n in sizes.most_common(2):
-            hints.append((w, h, "%d imagen(es) del tamaño de pantalla" % n))
-        return hints
+                if s:
+                    widths[s[0]] += 1
+                    if s in COMMON_SCREENS:
+                        screens[s] += 1
+        return screens, widths
+
+    def bytecode_screen(self):
+        """Screen size hard-coded in the game: the (w, h) pair whose two numbers appear together
+        in the most classes (e.g. fillRect(0, 0, 176, 208)). Returns (w, h, classes) or None."""
+        from .classfile import ClassFile
+        consts = []
+        for name in self.classes:
+            try:
+                cf = ClassFile(self.zip.read(name))
+                consts.append(int_constants(cf.data, cf.code_ranges, cf.cp))
+            except Exception:  # noqa: BLE001 - unreadable class: just skip it
+                pass
+        best = None
+        for w, h in COMMON_SCREENS:
+            if w >= h and (h, w) in COMMON_SCREENS:
+                continue  # each pair counted once (portrait form); orientation decided elsewhere
+            if w == h:
+                continue  # 128 / 208 alone are too common (bit masks...) to mean anything
+            n = sum(1 for c in consts if w in c and h in c)
+            # in a big code base two numbers meet by chance; demand a share of the classes
+            if n >= max(1, len(consts) // 20) and (best is None or n > best[2]):
+                best = (w, h, n)
+        return best
 
     def orientation_hint(self):
         v = (self.attrs.get("Nokia-MIDlet-App-Orientation") or "").lower()

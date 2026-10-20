@@ -55,6 +55,7 @@ final class DirectGraphicsImpl implements DirectGraphics {
         c.concat(m);
         c.drawBitmap(b, 0, 0, g.j2aBitmapPaint());
         c.restore();
+        g.j2aMark(x, y, x + bw, y + bh);
     }
 
     private void withColor(int argb, Runnable r) {

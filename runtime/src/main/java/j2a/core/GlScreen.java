@@ -73,7 +73,10 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     /** Copy of the last shown frame (screenshots). */
     Bitmap snapshot() {
         synchronized (lock) {
-            return staging == null ? null : staging.copy(Bitmap.Config.ARGB_8888, false);
+            if (staging == null) return null;
+            Rect a = AutoFit.area();
+            a.intersect(0, 0, staging.getWidth(), staging.getHeight());
+            return Bitmap.createBitmap(staging, a.left, a.top, a.width(), a.height());
         }
     }
 
@@ -99,6 +102,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             pending = true;
         }
         countFrame();
+        AutoFit.frameShown();
         requestRender();
     }
 
@@ -191,6 +195,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         if (uSampler >= 0) GLES20.glUniform1i(uSampler, 0);
         if (uTexel >= 0) GLES20.glUniform2f(uTexel, 1f / texW, 1f / texH);
         if (uPixel >= 0) GLES20.glUniform2f(uPixel, 1f / r.width(), 1f / r.height());
+        setTexCoords(AutoFit.area());
         quad.position(0);
         GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 16, quad);
         GLES20.glEnableVertexAttribArray(aPos);
@@ -200,6 +205,13 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             GLES20.glEnableVertexAttribArray(aTex);
         }
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    /** Shows only the given part of the game texture (AutoFit). */
+    private void setTexCoords(Rect a) {
+        float u0 = a.left / (float) texW, u1 = a.right / (float) texW;
+        float v0 = a.top / (float) texH, v1 = a.bottom / (float) texH;
+        quad.put(2, u0).put(3, v1).put(6, u1).put(7, v1).put(10, u0).put(11, v0).put(14, u1).put(15, v0);
     }
 
     private void loadShader(String id) {

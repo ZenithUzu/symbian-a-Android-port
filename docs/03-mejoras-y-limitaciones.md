@@ -9,6 +9,8 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Mejora | Opción |
 |---|---|
 | Escalado a cualquier pantalla: proporcional, entero (pixel-perfect) o estirado | `scale.mode=fit|integer|stretch` |
+| **Resolución y rotación automáticas al generar**: atributos del JAD/manifiesto, `240x320` en el nombre, modelo de teléfono en el nombre (N95, 6600, E71, 5800, K750…), imágenes del tamaño de pantalla y números de pantalla fijos en el código (p. ej. `fillRect(0,0,176,208)`) | automático |
+| **Ajuste automático dentro del APK**: si el juego solo dibuja una parte de la pantalla (p. ej. 176x208 dentro de 240x320), muestra solo esa parte a pantalla completa y gira el móvil a su orientación. Se recuerda para la próxima vez | `auto.fit`, menú |
 | Shaders por GPU (OpenGL ES 2.0): nítido, suavizado, *sharp bilinear*, scanlines, rejilla LCD, CRT, LCD verde | `shader=...`, menú |
 | Shaders externos en formato PPSSPP (`.ini/.fsh/.vsh`), p. ej. jdgleaver/ppsspp_shaders | `--shaders carpeta/` |
 | Modo de FPS: **vsync** (como el `flushGraphics` bloqueante de un teléfono), **dinámico** (Android 11+ cambia la tasa de refresco de la pantalla a la de los FPS del juego: 30/48/60/90/120 Hz, más fluido y menos batería) o sin límite | `fps.mode`, menú |

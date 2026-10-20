@@ -23,6 +23,16 @@ final class Settings {
         c.screenWidth = p.getInt("screen.width", c.screenWidth);
         c.screenHeight = p.getInt("screen.height", c.screenHeight);
         c.orientation = p.getString("orientation", c.orientation);
+        c.autoFit = p.getBoolean("auto.fit", c.autoFit);
+    }
+
+    /** Area detected by AutoFit for a given virtual screen ("" = not decided, "none" = full screen). */
+    static String fitFor(Context ctx, int w, int h) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("fit." + w + "x" + h, "");
+    }
+
+    static void saveFit(Context ctx, int w, int h, String value) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("fit." + w + "x" + h, value).apply();
     }
 
     static void save(Context ctx, Config c) {
@@ -37,6 +47,7 @@ final class Settings {
                 .putInt("fps.limit", c.fpsLimit)
                 .putBoolean("sound", c.sound)
                 .putString("orientation", c.orientation)
+                .putBoolean("auto.fit", c.autoFit)
                 .apply();
     }
 

@@ -16,6 +16,8 @@ public final class Config {
     public boolean filter = false;
     /** Post-processing shader id (see Shaders) or "file:<section>" from assets/shaders/*.ini. */
     public String shader = "nearest";
+    /** Shrink the shown area to what a fixed-resolution game really draws (see AutoFit). */
+    public boolean autoFit = true;
     /** vsync | dynamic | unlimited (see GlScreen). */
     public String fpsMode = "vsync";
     /** full | minimal | none */
@@ -50,6 +52,7 @@ public final class Config {
         c.filter = b(p, "scale.filter", c.filter);
         c.shader = s(p, "shader", c.filter ? "smooth" : "nearest");
         c.fpsMode = s(p, "fps.mode", c.fpsMode);
+        c.autoFit = b(p, "auto.fit", c.autoFit);
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
         c.haptics = b(p, "keypad.haptics", c.haptics);

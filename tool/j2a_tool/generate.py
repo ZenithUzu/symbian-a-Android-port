@@ -371,6 +371,8 @@ def _port_items(midlet_class, sw, sh, args):
         ("screen.height", sh),
         ("# fit = mantener proporción | integer = escalado entero (pixel perfect) | stretch = llenar", None),
         ("scale.mode", args.scale),
+        ("# Si el juego solo dibuja una parte de la pantalla (p. ej. 176x208), mostrar solo esa parte y girar", None),
+        ("auto.fit", "true"),
         ("# nearest | smooth | sharp | scanlines | lcd | crt | mono | file:<sección de assets/shaders/*.ini>", None),
         ("shader", args.shader or ("smooth" if args.filter else "nearest")),
         ("# vsync = sincronizado | dynamic = la pantalla adapta su Hz a los FPS del juego | unlimited", None),

@@ -75,7 +75,7 @@ python tool/j2a.py decompile Juego.jar -o Juego-src
 
 | Opción | Descripción |
 |---|---|
-| `--screen 240x320` | Resolución virtual. Si no la indicas, j2a la deduce del manifiesto (`Nokia-MIDlet-Original-Display-Size`), del nombre del archivo (`Juego_176x208.jar`) o de las imágenes. |
+| `--screen 240x320` | Resolución virtual. Normalmente no hace falta: j2a la deduce del manifiesto, del nombre del archivo (`Juego_176x208.jar`, `Juego_N95.jar`), de las imágenes y de los números fijos en el código. Además, el APK ajusta solo el área visible y la rotación si el juego dibuja menos de lo esperado. |
 | `--orientation portrait/landscape/auto` | Orientación de la app. |
 | `--scale fit/integer/stretch` | Escalado. |
 | `--shader sharp` | Shader por defecto: `nearest`, `smooth`, `sharp`, `scanlines`, `lcd`, `crt`, `mono`. |

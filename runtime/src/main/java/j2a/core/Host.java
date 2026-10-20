@@ -68,6 +68,8 @@ public final class Host {
         installCrashPolicy();
         screenImage = Image.createImage(cfg.screenWidth, cfg.screenHeight);
         screenGraphics = screenImage.getGraphics();
+        screenGraphics.j2aTrack();
+        AutoFit.start();
         System.setProperty("microedition.platform", cfg.platform);
         System.setProperty("microedition.locale", cfg.locale);
         System.setProperty("microedition.configuration", "CLDC-1.1");
@@ -287,6 +289,11 @@ public final class Host {
         g.present(frame);
     }
 
+    static void relayout() {
+        final ScreenView v = view;
+        if (v != null) v.post(new Runnable() { public void run() { v.relayout(); } });
+    }
+
     static void redrawOverlay() {
         ScreenView v = view;
         if (v != null) v.redraw();
@@ -399,6 +406,7 @@ public final class Host {
                         "Opacidad del teclado: " + (cfg.keypadAlpha * 100 / 255) + "%",
                         "Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"),
                         "Sonido: " + (cfg.sound ? "sí" : "no"),
+                        "Ajuste automático de resolución: " + (cfg.autoFit ? "sí" : "no"),
                         "Captura de pantalla",
                         "Restablecer opciones",
                         "Salir del juego"
@@ -454,8 +462,12 @@ public final class Host {
                                         if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
                                         else javax.microedition.media.Manager.j2aPauseAll();
                                         break;
-                                    case 11: Screenshot.save(activity, gl.snapshot()); return;
-                                    case 12:
+                                    case 11:
+                                        cfg.autoFit = !cfg.autoFit;
+                                        if (!cfg.autoFit) AutoFit.disable();
+                                        break;
+                                    case 12: Screenshot.save(activity, gl.snapshot()); return;
+                                    case 13:
                                         Settings.reset(activity);
                                         new AlertDialog.Builder(activity)
                                                 .setMessage("Opciones restablecidas. Se aplican al volver a abrir el juego.")
@@ -465,7 +477,7 @@ public final class Host {
                                                 .setNegativeButton("Más tarde", null)
                                                 .show();
                                         return;
-                                    case 13: requestExit(); return;
+                                    case 14: requestExit(); return;
                                 }
                                 settingsChanged();
                             }
