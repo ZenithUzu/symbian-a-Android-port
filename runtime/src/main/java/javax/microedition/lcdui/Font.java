@@ -39,7 +39,7 @@ public final class Font {
         paint.setTypeface(Typeface.create(base, tstyle));
         paint.setAntiAlias(Host.cfg.textAntialias);
         paint.setUnderlineText((style & STYLE_UNDERLINED) != 0);
-        int px = size == SIZE_SMALL ? Host.cfg.fontSmall : size == SIZE_LARGE ? Host.cfg.fontLarge : Host.cfg.fontMedium;
+        int px = Host.cfg.fontPx(size == SIZE_SMALL, size == SIZE_LARGE);
         paint.setTextSize(px);
         Paint.FontMetricsInt fm = paint.getFontMetricsInt();
         ascent = -fm.ascent;

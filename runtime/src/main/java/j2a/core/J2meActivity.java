@@ -45,6 +45,8 @@ public class J2meActivity extends Activity {
         Config cfg = Config.load(port);
         Settings.apply(this, cfg);
         onConfigLoaded(cfg);
+        Host.applyOrientation(this, cfg.orientation);
+        if (Build.VERSION.SDK_INT >= 33) registerBackCallback();
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
@@ -79,6 +81,30 @@ public class J2meActivity extends Activity {
             return;
         }
         Host.startMIDlet(cls);
+    }
+
+    /**
+     * Android 16+ stops sending KEYCODE_BACK to apps targeting API 36+. The manifest opts out
+     * (enableOnBackInvokedCallback=false), which Google calls temporary; this callback keeps BACK
+     * working once that opt-out goes away. Reflection keeps the runtime compilable with old SDKs.
+     */
+    private void registerBackCallback() {
+        try {
+            Class<?> cb = Class.forName("android.window.OnBackInvokedCallback");
+            Class<?> disp = Class.forName("android.window.OnBackInvokedDispatcher");
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(cb.getClassLoader(), new Class<?>[]{cb},
+                    new java.lang.reflect.InvocationHandler() {
+                        public Object invoke(Object self, java.lang.reflect.Method m, Object[] args) {
+                            if (m.getName().equals("onBackInvoked")) Host.backPressed();
+                            else if (m.getName().equals("equals")) return self == args[0];
+                            else if (m.getName().equals("hashCode")) return System.identityHashCode(self);
+                            else if (m.getName().equals("toString")) return "j2a-back";
+                            return null;
+                        }
+                    });
+            Object dispatcher = getClass().getMethod("getOnBackInvokedDispatcher").invoke(this);
+            disp.getMethod("registerOnBackInvokedCallback", int.class, cb).invoke(dispatcher, 0, proxy);
+        } catch (Throwable ignored) {}
     }
 
     /** Hook for ports: change Config values before the MIDlet starts. */

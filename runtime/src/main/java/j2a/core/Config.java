@@ -33,6 +33,10 @@ public final class Config {
     /** softkey: BACK = right softkey | menu: BACK opens the port menu */
     public String backAction = "softkey";
     public String midletClass;
+    /** Key codes sent for the soft keys (Nokia/SE -6/-7, Motorola -21/-22, Siemens -1/-4). */
+    public int softLeft = Keys.SOFT_LEFT, softRight = Keys.SOFT_RIGHT;
+    /** "" = as in the manifest | auto | portrait | landscape (changed from the port menu). */
+    public String orientation = "";
 
     static Config load(Properties p) {
         Config c = new Config();
@@ -55,11 +59,18 @@ public final class Config {
         c.locale = s(p, "microedition.locale", c.locale);
         c.backAction = s(p, "back.action", c.backAction);
         c.midletClass = s(p, "midlet.class", null);
-        int base = Math.min(c.screenWidth, c.screenHeight);
-        if (c.fontSmall <= 0) c.fontSmall = Math.max(8, Math.round(base * 0.050f));
-        if (c.fontMedium <= 0) c.fontMedium = Math.max(10, Math.round(base * 0.060f));
-        if (c.fontLarge <= 0) c.fontLarge = Math.max(12, Math.round(base * 0.075f));
+        c.softLeft = i(p, "softkey.left", c.softLeft);
+        c.softRight = i(p, "softkey.right", c.softRight);
         return c;
+    }
+
+    /** Font size in px; 0 in the config = derived from the (possibly user-changed) screen size. */
+    public int fontPx(boolean small, boolean large) {
+        int set = small ? fontSmall : large ? fontLarge : fontMedium;
+        if (set > 0) return set;
+        int base = Math.min(screenWidth, screenHeight);
+        return small ? Math.max(8, Math.round(base * 0.050f))
+                : large ? Math.max(12, Math.round(base * 0.075f)) : Math.max(10, Math.round(base * 0.060f));
     }
 
     private static String s(Properties p, String k, String d) {

@@ -68,8 +68,12 @@ abstract class BasePlayer implements Player, VolumeControl {
         checkClosed();
         prefetch();
         if (state != STARTED) {
-            applyVolume(volume());
-            doStart();
+            if (Host.isPaused()) {
+                resumeAfterPause = true; // started while in background: play on resume
+            } else {
+                applyVolume(volume());
+                doStart();
+            }
             state = STARTED;
             fire(PlayerListener.STARTED, Long.valueOf(getMediaTime()));
         }

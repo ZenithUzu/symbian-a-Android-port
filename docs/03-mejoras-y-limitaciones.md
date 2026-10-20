@@ -14,7 +14,10 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Teclado virtual multitáctil: cruceta con diagonales (1/3/7/9), teclado numérico, soft keys con el nombre del comando | `keypad=full|minimal|none`, `keypad.alpha`, `keypad.haptics` |
 | Mandos y teclados físicos (cruceta, A/B/X/Y, L1/R1, Start/Select, WASD, números) | automático |
 | Pantalla táctil enviada al juego como `pointerPressed/Dragged/Released` | automático |
-| Limitador de FPS para juegos que van demasiado rápido en CPUs modernas | `fps.limit=30` |
+| Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido | `fps.limit=30` |
+| Resolución elegible en el APK, incluido **widescreen** con la proporción del móvil (requiere reiniciar; útil en juegos que leen `getWidth()/getHeight()`) | menú del port |
+| Rotación elegible en el APK (automática/vertical/horizontal) | menú del port |
+| Soft keys de otros fabricantes (Motorola -21/-22, Siemens -1/-4, LG -202/-203) | `softkey.left`, `softkey.right` |
 | Contador de FPS | `show.fps=true` |
 | Formularios, listas y cajas de texto con controles nativos de Android y teclado del sistema | automático |
 | Pantalla completa inmersiva, soporte de notch, pantalla siempre encendida | automático |
@@ -22,6 +25,14 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Partidas guardadas persistentes (RMS) | automático |
 | Fuentes nítidas y escalables | `font.small/medium/large`, `text.antialias` |
 | Valor de `microedition.platform` (algunos juegos cambian el control según el modelo) | `microedition.platform` |
+
+## Android 16/17 (targetSdk 37)
+
+- En tablets y plegables (ancho ≥ 600dp) Android 17 ignora el bloqueo de orientación y de proporción.
+  El port reescala la pantalla J2ME a cualquier ventana, así que solo cambia el tamaño o las bandas negras.
+- El botón Atrás usa `OnBackInvokedCallback` además del opt-out `enableOnBackInvokedCallback=false`.
+- El audio se pausa al ir a segundo plano y los sonidos que el juego lance en segundo plano esperan
+  a que vuelvas (Android 17 bloquea el audio en segundo plano sin servicio en primer plano).
 
 ## Limitaciones conocidas
 

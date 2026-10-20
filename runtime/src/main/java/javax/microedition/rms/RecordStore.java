@@ -245,6 +245,10 @@ public class RecordStore {
         return e;
     }
 
+    void register(RecordEnumerationImpl e) {
+        if (!liveEnums.contains(e)) liveEnums.addElement(e);
+    }
+
     void unregister(RecordEnumerationImpl e) {
         liveEnums.removeElement(e);
     }

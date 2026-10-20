@@ -171,6 +171,16 @@ public final class Host {
 
     public static Displayable getCurrent() { return current; }
 
+    /** True while the activity is in the background (Android 17 blocks background audio). */
+    public static boolean isPaused() { return paused; }
+
+    static void applyOrientation(Activity a, String o) {
+        // 13 FULL_USER, 12 USER_PORTRAIT, 11 USER_LANDSCAPE; "" keeps the manifest value
+        if ("auto".equals(o)) a.setRequestedOrientation(13);
+        else if ("portrait".equals(o)) a.setRequestedOrientation(12);
+        else if ("landscape".equals(o)) a.setRequestedOrientation(11);
+    }
+
     public static void setCurrent(final Displayable next) {
         if (next == null) return;
         final Displayable prev = current;
@@ -256,7 +266,9 @@ public final class Host {
             if (type == 0 && (keyCode == Keys.SOFT_LEFT || keyCode == Keys.SOFT_RIGHT)) {
                 if (handleSoftKey(c, keyCode)) return;
             }
-            events.post(new Runnable() { public void run() { c.j2aKey(type, keyCode); } });
+            final int code = keyCode == Keys.SOFT_LEFT ? cfg.softLeft
+                    : keyCode == Keys.SOFT_RIGHT ? cfg.softRight : keyCode;
+            events.post(new Runnable() { public void run() { c.j2aKey(type, code); } });
         } else if (d != null && type == 0 && keyCode == Keys.SOFT_RIGHT) {
             Command back = d.j2aBackCommand();
             if (back != null) fireCommand(d, back);
@@ -337,11 +349,13 @@ public final class Host {
         runOnUi(new Runnable() {
             public void run() {
                 final String[] items = {
-                        "Teclado virtual: " + cfg.keypad,
+                        "Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight,
+                        "Rotación: " + (cfg.orientation.length() == 0 ? "la del juego" : cfg.orientation),
                         "Escalado: " + cfg.scaleMode,
                         "Filtro suave: " + (cfg.filter ? "sí" : "no"),
-                        "Mostrar FPS: " + (cfg.showFps ? "sí" : "no"),
                         "Límite de FPS: " + (cfg.fpsLimit == 0 ? "sin límite" : String.valueOf(cfg.fpsLimit)),
+                        "Mostrar FPS: " + (cfg.showFps ? "sí" : "no"),
+                        "Teclado virtual: " + cfg.keypad,
                         "Sonido: " + (cfg.sound ? "sí" : "no"),
                         "Salir del juego"
                 };
@@ -350,19 +364,37 @@ public final class Host {
                         .setItems(items, new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dlg, int which) {
                                 switch (which) {
-                                    case 0: cfg.keypad = next(cfg.keypad, "full", "minimal", "none"); break;
-                                    case 1: cfg.scaleMode = next(cfg.scaleMode, "fit", "integer", "stretch"); break;
-                                    case 2: cfg.filter = !cfg.filter; break;
-                                    case 3: cfg.showFps = !cfg.showFps; break;
-                                    case 4: cfg.fpsLimit = cfg.fpsLimit == 0 ? 30 : cfg.fpsLimit == 30 ? 60 : 0; break;
-                                    case 5:
+                                    case 0: pickResolution(); return;
+                                    case 1:
+                                        pick("Rotación", new String[]{"Automática", "Vertical", "Horizontal"},
+                                                new String[]{"auto", "portrait", "landscape"}, cfg.orientation,
+                                                new Runnable() {
+                                                    public void run() { applyOrientation(activity, cfg.orientation); }
+                                                }, "orientation");
+                                        return;
+                                    case 2:
+                                        pick("Escalado", new String[]{"Proporcional", "Entero (pixel perfect)", "Estirar (pantalla completa)"},
+                                                new String[]{"fit", "integer", "stretch"}, cfg.scaleMode, null, "scale");
+                                        return;
+                                    case 3: cfg.filter = !cfg.filter; break;
+                                    case 4:
+                                        pick("Límite de FPS", new String[]{"Sin límite", "15", "20", "25", "30", "50", "60"},
+                                                new String[]{"0", "15", "20", "25", "30", "50", "60"},
+                                                String.valueOf(cfg.fpsLimit), null, "fps");
+                                        return;
+                                    case 5: cfg.showFps = !cfg.showFps; break;
+                                    case 6:
+                                        pick("Teclado virtual", new String[]{"Completo", "Cruceta + OK", "Oculto"},
+                                                new String[]{"full", "minimal", "none"}, cfg.keypad, null, "keypad");
+                                        return;
+                                    case 7:
                                         cfg.sound = !cfg.sound;
-                                        if (!cfg.sound) javax.microedition.media.Manager.j2aPauseAll();
+                                        if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
+                                        else javax.microedition.media.Manager.j2aPauseAll();
                                         break;
-                                    case 6: requestExit(); return;
+                                    case 8: requestExit(); return;
                                 }
-                                Settings.save(activity, cfg);
-                                view.relayout();
+                                settingsChanged();
                             }
                         })
                         .show();
@@ -370,11 +402,66 @@ public final class Host {
         });
     }
 
-    private static String next(String cur, String... values) {
-        for (int i = 0; i < values.length; i++) {
-            if (values[i].equals(cur)) return values[(i + 1) % values.length];
-        }
-        return values[0];
+    private static void settingsChanged() {
+        Settings.save(activity, cfg);
+        view.relayout();
+    }
+
+    /** Single-choice dialog that writes the picked value into one Config field. */
+    private static void pick(String title, String[] labels, final String[] values, String current,
+                             final Runnable after, final String field) {
+        int checked = java.util.Arrays.asList(values).indexOf(current);
+        new AlertDialog.Builder(activity)
+                .setTitle(title)
+                .setSingleChoiceItems(labels, checked, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dlg, int which) {
+                        dlg.dismiss();
+                        String v = values[which];
+                        if (field.equals("orientation")) cfg.orientation = v;
+                        else if (field.equals("scale")) cfg.scaleMode = v;
+                        else if (field.equals("fps")) cfg.fpsLimit = Integer.parseInt(v);
+                        else if (field.equals("keypad")) cfg.keypad = v;
+                        if (after != null) after.run();
+                        settingsChanged();
+                    }
+                })
+                .show();
+    }
+
+    /** Classic phone sizes plus a widescreen mode that matches this device's aspect ratio. */
+    private static void pickResolution() {
+        final int[][] sizes = {{128, 160}, {176, 208}, {176, 220}, {240, 320}, {320, 240}, {240, 400},
+                {360, 640}, {640, 360}, {0, 0}};
+        String[] labels = new String[sizes.length];
+        for (int i = 0; i < sizes.length - 1; i++) labels[i] = sizes[i][0] + "x" + sizes[i][1];
+        labels[sizes.length - 1] = "Widescreen (proporción de este móvil)";
+        new AlertDialog.Builder(activity)
+                .setTitle("Resolución del juego")
+                .setItems(labels, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dlg, int which) {
+                        int w = sizes[which][0], h = sizes[which][1];
+                        if (w == 0) {
+                            android.util.DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+                            float aspect = Math.max(dm.widthPixels, dm.heightPixels)
+                                    / (float) Math.min(dm.widthPixels, dm.heightPixels);
+                            // keep the short side, stretch the long side to the device aspect
+                            w = cfg.screenWidth;
+                            h = cfg.screenHeight;
+                            if (w <= h) h = Math.round(w * aspect);
+                            else w = Math.round(h * aspect);
+                        }
+                        Settings.saveScreen(activity, w, h);
+                        new AlertDialog.Builder(activity)
+                                .setMessage("La resolución " + w + "x" + h + " se aplica al reiniciar el juego. "
+                                        + "Solo funciona bien en juegos que se adaptan al tamaño de pantalla.")
+                                .setPositiveButton("Salir ahora", new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface d, int x) { requestExit(); }
+                                })
+                                .setNegativeButton("Más tarde", null)
+                                .show();
+                    }
+                })
+                .show();
     }
 
     static void showFatal(final Throwable t) {

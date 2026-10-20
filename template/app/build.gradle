@@ -3,29 +3,31 @@ plugins {
 }
 
 android {
-    namespace '@@PACKAGE@@'
-    compileSdk 35
+    namespace = '@@PACKAGE@@'
+    compileSdk = 37
 
     defaultConfig {
-        applicationId '@@PACKAGE@@'
-        minSdk 21
-        targetSdk 35
-        versionCode @@VERSION_CODE@@
-        versionName '@@VERSION_NAME@@'
+        applicationId = '@@PACKAGE@@'
+        minSdk = 21
+        // API 37 (Android 17): orientation locks are ignored on tablets/foldables; the port
+        // already rescales to any window, so the game just gets letterboxed or bigger.
+        targetSdk = 37
+        versionCode = @@VERSION_CODE@@
+        versionName = '@@VERSION_NAME@@'
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = false
             // Signed with the debug key so "Build APK" gives an installable file.
             // Create your own key (Build > Generate Signed Bundle / APK) to publish.
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     packaging {
@@ -35,8 +37,8 @@ android {
     }
 
     lint {
-        abortOnError false
-        checkReleaseBuilds false
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 

@@ -4,19 +4,19 @@ plugins {
 
 // J2ME (MIDP 2.0 / CLDC 1.1 + MMAPI + Nokia/Samsung extensions) implemented on Android.
 android {
-    namespace 'j2a.runtime'
-    compileSdk 35
+    namespace = 'j2a.runtime'
+    compileSdk = 37
 
     defaultConfig {
-        minSdk 21
+        minSdk = 21
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     lint {
-        abortOnError false
+        abortOnError = false
     }
 }

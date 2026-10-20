@@ -91,8 +91,12 @@ final class RecordEnumerationImpl implements RecordEnumeration {
     public void keepUpdated(boolean keep) {
         check();
         keepUpdated = keep;
-        if (keep) rebuild();
-        else store.unregister(this);
+        if (keep) {
+            store.register(this);
+            rebuild();
+        } else {
+            store.unregister(this);
+        }
     }
 
     public boolean isKeptUpdated() { return keepUpdated; }

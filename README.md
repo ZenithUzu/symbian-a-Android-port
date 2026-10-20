@@ -78,6 +78,13 @@ python tool/j2a.py decompile Juego.jar -o Juego-src
 Todas las opciones de ejecución se pueden cambiar después en
 `app/src/main/assets/j2a/port.properties`.
 
+### Opciones dentro del APK
+
+El jugador puede cambiar desde el **menú del port** (botón ☰ del teclado virtual, o Escape):
+resolución (128x160 … 640x360 y **widescreen** con la proporción del móvil), rotación
+(automática/vertical/horizontal), escalado (proporcional, entero, estirar), suavizado,
+límite de FPS (15–60), contador de FPS, teclado virtual y sonido. Se guardan entre sesiones.
+
 ## Cómo funciona
 
 1. **Análisis** — lee `MANIFEST.MF`/JAD y el *constant pool* de cada `.class` para saber qué APIs
@@ -109,7 +116,7 @@ Bluetooth, FileConnection.
 tool/j2a.py              CLI (analyze, decompile, port, patch, verify, doctor)
 tool/j2a_tool/           parser de .class, parche de bytecode, descompilación, generador
 runtime/                 módulo Android "j2me-runtime": javax.microedition.* sobre Android
-template/                plantilla del proyecto Android Studio (Gradle 8.13, AGP 8.13)
+template/                plantilla del proyecto Android Studio (Gradle 9.3.1, AGP 9.1.1, compileSdk/targetSdk 37)
 samples/demo-midlet/     juego J2ME de prueba (GameCanvas, Sprite, RMS, Forms, sonido)
 docs/                    documentación
 ```

@@ -61,7 +61,7 @@ public final class Manager {
 
     public static void playTone(int note, int duration, int volume) throws MediaException {
         if (note < 0 || note > 127 || duration <= 0) throw new IllegalArgumentException();
-        if (!Host.cfg.sound) return;
+        if (!Host.cfg.sound || Host.isPaused()) return;
         ToneSynth.playTone(note, duration, volume, 1f);
     }
 

@@ -17,6 +17,9 @@ final class Settings {
         c.showFps = p.getBoolean("show.fps", c.showFps);
         c.fpsLimit = p.getInt("fps.limit", c.fpsLimit);
         c.sound = p.getBoolean("sound", c.sound);
+        c.screenWidth = p.getInt("screen.width", c.screenWidth);
+        c.screenHeight = p.getInt("screen.height", c.screenHeight);
+        c.orientation = p.getString("orientation", c.orientation);
     }
 
     static void save(Context ctx, Config c) {
@@ -27,6 +30,13 @@ final class Settings {
                 .putBoolean("show.fps", c.showFps)
                 .putInt("fps.limit", c.fpsLimit)
                 .putBoolean("sound", c.sound)
+                .putString("orientation", c.orientation)
                 .apply();
+    }
+
+    /** Only written when the player picks a resolution, so port.properties stays the default. */
+    static void saveScreen(Context ctx, int w, int h) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt("screen.width", w).putInt("screen.height", h).apply();
     }
 }

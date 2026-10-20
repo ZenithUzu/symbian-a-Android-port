@@ -55,7 +55,7 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private long lastPresent;
+    private long nextFrameNs;
     private int frames;
     private long fpsWindow;
     private int fps;
@@ -94,15 +94,8 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
 
     /** Draws a frame. Callable from any thread. */
     public void present(Bitmap frame) {
-        Config c = Host.cfg;
-        if (c.fpsLimit > 0 && Looper.myLooper() != Looper.getMainLooper()) {
-            long frameMs = 1000L / c.fpsLimit;
-            long wait = lastPresent + frameMs - SystemClock.uptimeMillis();
-            if (wait > 0) {
-                try { Thread.sleep(wait); } catch (InterruptedException ignored) {}
-            }
-        }
-        lastPresent = SystemClock.uptimeMillis();
+        // Only real frames from game threads are paced; keypad redraws never wait.
+        if (frame != null && Host.cfg.fpsLimit > 0 && Looper.myLooper() != Looper.getMainLooper()) pace(Host.cfg.fpsLimit);
         synchronized (presentLock) {
             if (frame != null) {
                 lastFrame = frame;
@@ -117,6 +110,21 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
                 getHolder().unlockCanvasAndPost(canvas);
             }
         }
+    }
+
+    /**
+     * Fixed-cadence frame limiter: sleeps until the next slot measured in nanoseconds, so a
+     * 30 FPS limit gives 30 FPS (sleeping "1000/30 ms after the last frame" drifts to ~27).
+     */
+    private void pace(int fps) {
+        long period = 1000000000L / fps;
+        long now = System.nanoTime();
+        long wait = nextFrameNs - now;
+        if (wait > 0) {
+            try { Thread.sleep(wait / 1000000L, (int) (wait % 1000000L)); } catch (InterruptedException ignored) {}
+        }
+        // keep the cadence, but don't try to "catch up" after a long hiccup
+        nextFrameNs = (wait > -period ? nextFrameNs : now) + period;
     }
 
     /** Re-draws the last frame (e.g. when a keypad button changes state). */
