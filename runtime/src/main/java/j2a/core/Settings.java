@@ -32,6 +32,15 @@ final class Settings {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("fit." + w + "x" + h, "");
     }
 
+    /** Rotation AutoFit detected for this virtual screen ("" = not decided). */
+    static String rotationFor(Context ctx, int w, int h) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("rot." + w + "x" + h, "");
+    }
+
+    static void saveRotation(Context ctx, int w, int h, int r) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("rot." + w + "x" + h, String.valueOf(r)).apply();
+    }
+
     static void saveFit(Context ctx, int w, int h, String value) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("fit." + w + "x" + h, value).apply();
     }

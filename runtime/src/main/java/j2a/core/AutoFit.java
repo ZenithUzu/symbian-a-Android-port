@@ -27,15 +27,33 @@ public final class AutoFit {
     private static int frames;
     private static long firstNs;
     private static volatile Rect fit; // null = whole screen
+    /** Image area drawn upright / rotated 90° clockwise / rotated 270° (sideways games). */
+    private static long uprightArea, cwArea, ccwArea;
+    private static volatile int detectedRotation;
+    private static boolean rotationDecided;
 
     private AutoFit() {}
+
+    static int detectedRotation() {
+        return detectedRotation;
+    }
 
     static void start() {
         screenW = Host.cfg.screenWidth;
         screenH = Host.cfg.screenHeight;
+        String rot = Settings.rotationFor(Host.activity, screenW, screenH);
+        if (rot.length() > 0) {
+            detectedRotation = Integer.parseInt(rot);
+            rotationDecided = true;
+        }
         if (!Host.cfg.autoFit) return;
         String saved = Settings.fitFor(Host.activity, screenW, screenH);
-        if ("none".equals(saved)) return; // this game uses the whole screen
+        tracking = true;
+        if ("none".equals(saved)) { // whole screen (still watching rotation if undecided)
+            fitDone = true;
+            tracking = !rotationDecided;
+            return;
+        }
         int[] wh = parse(saved);
         if (wh != null && wh[0] + wh[2] <= screenW && wh[1] + wh[3] <= screenH) {
             fit = new Rect(wh[0], wh[1], wh[0] + wh[2], wh[1] + wh[3]);
@@ -57,6 +75,20 @@ public final class AutoFit {
         return f != null ? new Rect(f) : new Rect(0, 0, Host.cfg.screenWidth, Host.cfg.screenHeight);
     }
 
+    /**
+     * An image drawn on the screen. turn: 0 upright, 90 = MIDP TRANS_ROT90 (clockwise),
+     * 270 = TRANS_ROT270. Games that play sideways on a portrait phone draw (almost) every
+     * image rotated, often as one big rotated buffer.
+     */
+    public static void imageDrawn(int turn, int area) {
+        if (rotationDecided) return;
+        synchronized (lock) {
+            if (turn == 90) cwArea += area;
+            else if (turn == 270) ccwArea += area;
+            else uprightArea += area;
+        }
+    }
+
     /** Called by Graphics for every primitive drawn on a screen-sized buffer (device coords). */
     public static void drawn(int dl, int dt, int dr, int db, int targetW, int targetH) {
         if (targetW != screenW || targetH != screenH) return;
@@ -75,11 +107,13 @@ public final class AutoFit {
         long now = System.nanoTime();
         if (firstNs == 0) firstNs = now;
         frames++;
-        if (now - firstNs > GIVE_UP_NS) {
+        if (now - firstNs > GIVE_UP_NS || (fitDone && rotationDecided)) {
             tracking = false; // undecided after 2 min: leave the full screen, try again next launch
             return;
         }
         if (frames < 120 || now - firstNs < WARMUP_NS) return;
+        if (!rotationDecided) decideRotation();
+        if (fitDone) return;
         int cl, ct, cr, cb;
         synchronized (lock) {
             cl = l;
@@ -100,9 +134,39 @@ public final class AutoFit {
         decide(new Rect(match[0], match[1], match[0] + match[2], match[1] + match[3]));
     }
 
+    private static boolean fitDone;
+
+    private static void decideRotation() {
+        long up, cw, ccw;
+        synchronized (lock) {
+            up = uprightArea;
+            cw = cwArea;
+            ccw = ccwArea;
+        }
+        long screens = (long) screenW * screenH;
+        int r = 0;
+        // rotated images must clearly dominate and add up to at least ~20 full screens
+        if (cw > 2 * (up + ccw) && cw > 20 * screens) r = 270;       // drawn clockwise -> turn back
+        else if (ccw > 2 * (up + cw) && ccw > 20 * screens) r = 90;
+        else if (up + cw + ccw < 20 * screens) return;               // not enough evidence yet
+        rotationDecided = true;
+        detectedRotation = r;
+        Settings.saveRotation(Host.activity, screenW, screenH, r);
+        if (r != 0 && Host.cfg.rotate < 0) {
+            Host.runOnUi(new Runnable() {
+                public void run() { Host.applyOrientation(Host.activity); }
+            });
+            Host.relayout();
+        }
+        if (fitDone) tracking = false;
+    }
+
     private static void decide(Rect f) {
         fit = f;
-        if (f == null) tracking = false;
+        if (f == null) {
+            fitDone = true;
+            if (rotationDecided) tracking = false;
+        }
         Settings.saveFit(Host.activity, screenW, screenH,
                 f == null ? "none" : f.left + "," + f.top + "," + f.width() + "x" + f.height());
         orient();
@@ -111,7 +175,7 @@ public final class AutoFit {
 
     /** Rotates to the fitted area's orientation unless the player chose one. */
     private static void orient() {
-        if (Host.cfg.orientation.length() > 0 || Host.cfg.rotate != 0 || Host.activity == null) return;
+        if (Host.cfg.orientation.length() > 0 || Host.rotation() != 0 || Host.activity == null) return;
         Rect a = area();
         final String o = a.width() > a.height() ? "landscape" : "portrait";
         Host.runOnUi(new Runnable() {

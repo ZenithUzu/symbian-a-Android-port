@@ -5,6 +5,8 @@ import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 
+import j2a.core.AutoFit;
+
 import javax.microedition.lcdui.Graphics;
 import javax.microedition.lcdui.Image;
 
@@ -58,6 +60,8 @@ final class DirectGraphicsImpl implements DirectGraphics {
         c.drawBitmap(b, 0, 0, g.j2aBitmapPaint());
         c.restore();
         g.j2aMark(x, y, x + bw, y + bh);
+        // Nokia rotates counter-clockwise: ROTATE_90 here = MIDP TRANS_ROT270
+        if (AutoFit.tracking && g.j2aTracked()) AutoFit.imageDrawn(rot == 90 ? 270 : rot == 270 ? 90 : 0, bw * bh);
     }
 
     private void withColor(int argb, Runnable r) {

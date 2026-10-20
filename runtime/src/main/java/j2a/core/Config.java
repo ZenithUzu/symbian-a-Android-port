@@ -16,8 +16,8 @@ public final class Config {
     public boolean filter = false;
     /** Post-processing shader id (see Shaders) or "file:<section>" from assets/shaders/*.ini. */
     public String shader = "nearest";
-    /** Rotate the game image 0/90/270 degrees (games that draw sideways for landscape play). */
-    public int rotate = 0;
+    /** Rotate the game image 0/90/270 degrees (games that draw sideways); -1 = detect (AutoFit). */
+    public int rotate = -1;
     /** Shrink the shown area to what a fixed-resolution game really draws (see AutoFit). */
     public boolean autoFit = true;
     /** vsync | dynamic | unlimited (see GlScreen). */

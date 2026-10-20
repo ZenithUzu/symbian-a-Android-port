@@ -78,7 +78,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             Rect a = AutoFit.area();
             a.intersect(0, 0, staging.getWidth(), staging.getHeight());
             android.graphics.Matrix m = new android.graphics.Matrix();
-            m.postRotate(Host.cfg.rotate);
+            m.postRotate(Host.rotation());
             return Bitmap.createBitmap(staging, a.left, a.top, a.width(), a.height(), m, false);
         }
     }
@@ -220,8 +220,8 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         // corners of the game image: top-left, top-right, bottom-left, bottom-right
         float[] tl = {u0, v0}, tr = {u1, v0}, bl = {u0, v1}, br = {u1, v1};
         float[][] c; // what goes at screen BL, BR, TL, TR
-        if (Host.cfg.rotate == 90) c = new float[][]{br, tr, bl, tl};        // clockwise
-        else if (Host.cfg.rotate == 270) c = new float[][]{tl, bl, tr, br};  // counter-clockwise
+        if (Host.rotation() == 90) c = new float[][]{br, tr, bl, tl};        // clockwise
+        else if (Host.rotation() == 270) c = new float[][]{tl, bl, tr, br};  // counter-clockwise
         else c = new float[][]{bl, br, tl, tr};
         for (int i = 0; i < 4; i++) quad.put(i * 4 + 2, c[i][0]).put(i * 4 + 3, c[i][1]);
     }

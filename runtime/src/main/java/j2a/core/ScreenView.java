@@ -171,7 +171,7 @@ public class ScreenView extends View {
     private void fit(int ax, int ay, int aw, int ah) {
         Config c = Host.cfg;
         Rect area = AutoFit.area();
-        boolean turned = c.rotate == 90 || c.rotate == 270;
+        boolean turned = Host.rotation() == 90 || Host.rotation() == 270;
         int sw = turned ? area.height() : area.width(), sh = turned ? area.width() : area.height();
         aw -= ax;
         ah -= ay;
@@ -179,6 +179,18 @@ public class ScreenView extends View {
         if ("stretch".equals(c.scaleMode)) {
             w = aw;
             h = ah;
+        } else if ("wide".equals(c.scaleMode)) {
+            // widen (or heighten) the game toward the free area, but never past 16:9 / 9:16
+            float game = sw / (float) sh, room = aw / (float) ah, target = game;
+            if (game >= 1 && room > game) target = Math.min(room, 16f / 9f);
+            else if (game < 1 && room < game) target = Math.max(room, 9f / 16f);
+            if (target > room) {
+                w = aw;
+                h = Math.round(aw / target);
+            } else {
+                h = ah;
+                w = Math.round(ah * target);
+            }
         } else {
             float s = Math.min(aw / (float) sw, ah / (float) sh);
             if ("integer".equals(c.scaleMode) && s >= 1) s = (float) Math.floor(s);
@@ -374,8 +386,8 @@ public class ScreenView extends View {
         float nx = (x - dst.left) / Math.max(1f, dst.width());
         float ny = (y - dst.top) / Math.max(1f, dst.height());
         float u, v;
-        if (Host.cfg.rotate == 90) { u = ny; v = 1 - nx; }
-        else if (Host.cfg.rotate == 270) { u = 1 - ny; v = nx; }
+        if (Host.rotation() == 90) { u = ny; v = 1 - nx; }
+        else if (Host.rotation() == 270) { u = 1 - ny; v = nx; }
         else { u = nx; v = ny; }
         Rect a = AutoFit.area();
         int gx = a.left + (int) (u * a.width()), gy = a.top + (int) (v * a.height());

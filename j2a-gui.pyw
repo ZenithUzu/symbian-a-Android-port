@@ -30,7 +30,9 @@ SHADERS = [("Píxeles nítidos", "nearest"), ("Nítido sin deformar (sharp)", "s
 FPS_MODES = [("Sincronizado (vsync)", "vsync"), ("Dinámico (la pantalla se adapta)", "dynamic"),
              ("Sin límite", "unlimited")]
 FPS_LIMITS = [("Sin límite", "0"), ("15", "15"), ("20", "20"), ("25", "25"), ("30", "30"), ("60", "60")]
-ROTATIONS = [("No", "0"), ("90° (el juego dibuja de lado, girar a la derecha)", "90"),
+SCALES = [("Proporción original", "fit"), ("16:9 (usa casi toda la pantalla, deforma poco)", "wide"),
+          ("Pixel perfect", "integer"), ("Completa (estirar)", "stretch")]
+ROTATIONS = [("Automático (detecta juegos que dibujan de lado)", None), ("No", "0"), ("90° (el juego dibuja de lado, girar a la derecha)", "90"),
              ("270° (el juego dibuja de lado, girar a la izquierda)", "270")]
 KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruceta + números)", "full"),
            ("Cruceta + OK", "minimal"), ("Sin teclado (el juego trae controles táctiles)", "none")]
@@ -39,8 +41,8 @@ KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruc
 def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
     a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
-         "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--rotate", v.get("rotate") or "0"]
-    for key, flag in (("keypad", "--keypad"), ("screen", "--screen"), ("orientation", "--orientation"), ("name", "--name"),
+         "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--scale", v.get("scale") or "fit"]
+    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("screen", "--screen"), ("orientation", "--orientation"), ("name", "--name"),
                       ("package", "--package"), ("shaders", "--shaders")):
         if v.get(key):
             a += [flag, v[key]]
@@ -82,6 +84,7 @@ class App(tk.Tk):
         r = self.combo_row(f, r, "Modo", "mode", MODES)
         r = self.combo_row(f, r, "Resolución", "screen", SCREENS)
         r = self.combo_row(f, r, "Rotación", "orientation", ORIENTATIONS)
+        r = self.combo_row(f, r, "Pantalla", "scale", SCALES)
         r = self.combo_row(f, r, "Girar imagen", "rotate", ROTATIONS)
         r = self.combo_row(f, r, "Shader", "shader", SHADERS)
         r = self.combo_row(f, r, "Modo de FPS", "fps_mode", FPS_MODES)
@@ -182,7 +185,7 @@ class App(tk.Tk):
             messagebox.showwarning("j2a", "Elige dónde guardar el proyecto.")
             return
         v = {k: self.value(k) for k in ("jar", "out", "name", "package", "mode", "screen", "orientation",
-                                        "shader", "fps_mode", "fps", "keypad", "shaders", "rotate")}
+                                        "shader", "fps_mode", "fps", "keypad", "shaders", "rotate", "scale")}
         v["force"] = self.vars["force"].get()
         self.run(build_args(v), done=lambda ok: ok and messagebox.showinfo(
             "j2a", "Proyecto listo.\n\nAbre la carpeta en Android Studio (File > Open) y pulsa Run ▶."))

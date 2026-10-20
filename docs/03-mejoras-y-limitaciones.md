@@ -8,7 +8,7 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 
 | Mejora | Opción |
 |---|---|
-| Escalado a cualquier pantalla: proporcional, entero (pixel-perfect) o estirado | `scale.mode=fit|integer|stretch` |
+| Pantalla: proporción original, pixel perfect, **16:9** (ensancha el juego hacia la pantalla sin pasar de 16:9: llena casi todo y deforma poco) o completa (estirar) | `scale.mode=fit|integer|wide|stretch`, menú |
 | **Resolución y rotación automáticas al generar**: atributos del JAD/manifiesto, `240x320` en el nombre, modelo de teléfono en el nombre (N95, 6600, E71, 5800, K750…), imágenes del tamaño de pantalla y números de pantalla fijos en el código (p. ej. `fillRect(0,0,176,208)`) | automático |
 | **Ajuste automático dentro del APK**: si el juego solo dibuja una parte de la pantalla (p. ej. 176x208 dentro de 240x320), muestra solo esa parte a pantalla completa y gira el móvil a su orientación. Se recuerda para la próxima vez | `auto.fit`, menú |
 | Shaders por GPU (OpenGL ES 2.0): nítido, suavizado, *sharp bilinear*, scanlines, rejilla LCD, CRT, LCD verde | `shader=...`, menú |
@@ -26,7 +26,7 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido | `fps.limit=30` |
 | Resolución elegible en el APK, incluido **widescreen** con la proporción del móvil (requiere reiniciar; útil en juegos que leen `getWidth()/getHeight()`) | menú del port |
 | Rotación elegible en el APK (automática/vertical/horizontal) | menú del port |
-| **Girar imagen 90°/270°** para juegos que se juegan de lado en un teléfono vertical: la app pasa a horizontal de verdad (barra de notificaciones y gestos correctos) y el táctil se gira también | `rotate`, `--rotate`, menú |
+| **Girar imagen 90°/270°** para juegos que se juegan de lado en un teléfono vertical: la app pasa a horizontal de verdad (barra de notificaciones y gestos correctos) y el táctil se gira también. **Automático por defecto**: si casi todo lo que dibuja el juego son imágenes giradas (`TRANS_ROT90/270`, `DirectGraphics.ROTATE_90/270`), gira solo y lo recuerda | `rotate=-1|0|90|270`, `--rotate`, menú |
 | Zonas que el juego nunca dibuja se ven negras (no blancas); el ajuste automático también recorta contenido centrado (p. ej. en la resolución widescreen de un juego que no se adapta) | automático |
 | Entrada con baja latencia: toques sin esperar al siguiente frame (Android 11+), el hilo de eventos del juego nunca espera a la GPU y tiene prioridad de pantalla; el modo de FPS dinámico no baja de 60 Hz | automático |
 | Nombre oficial: el paquete sale del propio juego (`com.sega.sonic`) o de su editor (`com.gameloft.sonicunleashed`); la carpeta y el APK se llaman como el juego (`Sonic_Unleashed-1.0.0-debug.apk`) | automático, `--package` |

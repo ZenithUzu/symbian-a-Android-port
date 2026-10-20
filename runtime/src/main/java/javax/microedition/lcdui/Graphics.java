@@ -330,7 +330,10 @@ public class Graphics {
         if ((anchor & VCENTER) != 0) y -= b.getHeight() / 2;
         else if ((anchor & BOTTOM) != 0) y -= b.getHeight();
         canvas.drawBitmap(b, x, y, bmp);
-        if (track) j2aMark(x, y, x + b.getWidth(), y + b.getHeight());
+        if (track) {
+            j2aMark(x, y, x + b.getWidth(), y + b.getHeight());
+            if (AutoFit.tracking) AutoFit.imageDrawn(0, b.getWidth() * b.getHeight());
+        }
     }
 
     public void drawRegion(Image src, int xSrc, int ySrc, int width, int height, int transform,
@@ -344,7 +347,11 @@ public class Graphics {
         else if ((anchor & RIGHT) != 0) x -= dw;
         if ((anchor & VCENTER) != 0) y -= dh / 2;
         else if ((anchor & BOTTOM) != 0) y -= dh;
-        if (track) j2aMark(x, y, x + dw, y + dh);
+        if (track) {
+            j2aMark(x, y, x + dw, y + dh);
+            // TRANS_ROT90 = 5, TRANS_ROT270 = 6 (mirrored variants say nothing about the phone's side)
+            if (AutoFit.tracking) AutoFit.imageDrawn(transform == 5 ? 90 : transform == 6 ? 270 : 0, dw * dh);
+        }
         if (transform == 0) {
             srcRect.set(xSrc, ySrc, xSrc + width, ySrc + height);
             rf.set(x, y, x + width, y + height);
@@ -427,6 +434,8 @@ public class Graphics {
     }
 
     // ------------------------------------------------------- j2a extensions
+
+    public boolean j2aTracked() { return track; }
 
     /** Marks this Graphics as drawing to the visible game screen. */
     public void j2aTrack() { track = true; }
