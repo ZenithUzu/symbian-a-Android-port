@@ -131,6 +131,55 @@ def pick_screen(args, report):
     return 240, 320, "valor por defecto"
 
 
+def jni_mangle(name):
+    """Java name -> JNI symbol form ('_' -> '_1', '.' -> '_')."""
+    return name.replace("_", "_1").replace(".", "_")
+
+
+def copy_m3g(dst, engine_pkg, remap):
+    """Adds the native 3D engine (Nokia M3G, C) and its Java bindings to the engine module."""
+    root = paths.m3g_dir()
+    java_root = os.path.join(root, "java")
+    for d, _, files in os.walk(java_root):
+        for f in files:
+            rel = os.path.relpath(os.path.join(d, f), java_root).replace(os.sep, "/")
+            with io.open(os.path.join(d, f), encoding="utf-8") as fh:
+                text = fh.read()
+            if remap:
+                rel, text = remap[0].sub(remap[1], rel), remap[0].sub(remap[1], text)
+            target = os.path.join(dst, "src", "main", "java", rel.replace("/", os.sep))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with io.open(target, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(text)
+    # JNI function names encode the Java package: rename them along with the package
+    jni_old = "Java_javax_microedition_m3g_"
+    jni_new = "Java_%s_" % jni_mangle(engine_pkg + ".m3g") if remap else jni_old
+    cpp_root = os.path.join(root, "cpp")
+    for d, _, files in os.walk(cpp_root):
+        for f in files:
+            src = os.path.join(d, f)
+            target = os.path.join(dst, "src", "main", "cpp", os.path.relpath(src, cpp_root))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(src, "rb") as fh:
+                text = fh.read().decode("latin-1")  # byte-exact round trip for any encoding
+            with open(target, "wb") as fh:
+                fh.write(text.replace(jni_old, jni_new).encode("latin-1"))
+    shutil.copyfile(os.path.join(root, "NOTICE-M3G.md"), os.path.join(dst, "NOTICE-M3G.md"))
+    gradle = os.path.join(dst, "build.gradle")
+    with io.open(gradle, encoding="utf-8") as fh:
+        text = fh.read()
+    text = text.replace("    lint {", """    // 3D (M3G): Nokia's native engine in C/C++, built with the NDK (Android Studio installs it)
+    externalNativeBuild {
+        ndkBuild {
+            path = file('src/main/cpp/Android.mk')
+        }
+    }
+
+    lint {""", 1)
+    with io.open(gradle, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
 def copy_engine(dst, engine_pkg, remap):
     """Copies runtime/ as the 'engine' module, moving sources to the renamed packages."""
     src_root = paths.runtime_dir()
@@ -331,6 +380,9 @@ def port(args):
     # so the APK contains no javax.microedition / com.nokia classes at all.
     remap = None if args.keep_j2me_packages else decompile.native_remapper(engine_pkg)
     copy_engine(os.path.join(out, "engine"), engine_pkg, remap)
+    if report["uses_m3g"]:
+        copy_m3g(os.path.join(out, "engine"), engine_pkg, remap)
+        log("  3D (M3G): motor 3D nativo incluido (engine/src/main/cpp); Android Studio usará el NDK")
 
     app = os.path.join(out, "app")
     java_root = os.path.join(app, "src", "main", "java")

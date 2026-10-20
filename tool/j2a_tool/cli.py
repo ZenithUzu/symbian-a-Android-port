@@ -113,6 +113,8 @@ def cmd_doctor(a):
         p = os.path.join(paths.cache_dir(), "tools", fname)
         print("%-11s %s" % (name + ":", p if os.path.isfile(p) else "se descargará al usarlo"))
     print("Runtime J2ME: %s" % paths.runtime_dir())
+    print("3D (M3G):     %s (los juegos 3D necesitan el NDK: Android Studio > SDK Manager > SDK Tools)"
+          % paths.m3g_dir())
     print("")
     print("Todo listo." if ok else "Falta Java: instala Android Studio o un JDK 17+.")
 

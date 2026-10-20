@@ -58,7 +58,8 @@ def require_java(tool="java"):
 NATIVE_PACKAGES = [
     ("javax/microedition/lcdui/", "lcdui/"), ("javax/microedition/midlet/", "midlet/"),
     ("javax/microedition/rms/", "rms/"), ("javax/microedition/media/", "media/"),
-    ("javax/microedition/io/", "io/"), ("com/nokia/mid/", "nokia/"), ("com/samsung/util/", "samsung/"),
+    ("javax/microedition/io/", "io/"), ("javax/microedition/m3g/", "m3g/"),
+    ("com/nokia/mid/", "nokia/"), ("com/samsung/util/", "samsung/"),
     ("j2a/core/", "core/"),
 ]
 
@@ -163,16 +164,16 @@ def runtime_classes_jar(android_jar):
     javac = paths.java_bin("javac")
     if not javac:
         return None
-    src_root = os.path.join(paths.runtime_dir(), "src", "main", "java")
     files = []
     h = hashlib.sha1(android_jar.encode())
-    for d, _, fs in os.walk(src_root):
-        for f in sorted(fs):
-            if f.endswith(".java"):
-                p = os.path.join(d, f)
-                files.append(p)
-                with open(p, "rb") as fh:
-                    h.update(fh.read())
+    for src_root in paths.java_source_roots():
+        for d, _, fs in sorted(os.walk(src_root)):
+            for f in sorted(fs):
+                if f.endswith(".java"):
+                    p = os.path.join(d, f)
+                    files.append(p)
+                    with open(p, "rb") as fh:
+                        h.update(fh.read())
     out = os.path.join(paths.cache_dir(), "runtime-%s.jar" % h.hexdigest()[:12])
     if os.path.isfile(out):
         return out

@@ -62,6 +62,12 @@ public final class AutoFit {
         tracking = true;
     }
 
+    /** 3D (M3G) renders over the whole bound screen: never crop such a game. Cheap after the first call. */
+    public static void wholeScreen() {
+        if (fitDone && fit == null) return;
+        decide(null);
+    }
+
     /** Player turned it off: show the whole screen again (turning it on applies on next start). */
     static void disable() {
         tracking = false;

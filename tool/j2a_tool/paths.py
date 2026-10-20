@@ -12,6 +12,16 @@ def runtime_dir():
     return os.path.join(REPO, "runtime")
 
 
+def m3g_dir():
+    """Optional native 3D module (Nokia M3G), only copied into ports of 3D games."""
+    return os.path.join(REPO, "runtime-m3g")
+
+
+def java_source_roots():
+    """All Java source trees of the engine (runtime + optional M3G bindings)."""
+    return [os.path.join(runtime_dir(), "src", "main", "java"), os.path.join(m3g_dir(), "java")]
+
+
 def template_dir():
     return os.path.join(REPO, "template")
 

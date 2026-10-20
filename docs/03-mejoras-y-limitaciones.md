@@ -61,7 +61,9 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 
 ## Limitaciones conocidas
 
-- **3D**: M3G (JSR-184) y MascotCapsule no están implementados. `j2a analyze` lo avisa.
+- **3D**: M3G (JSR-184) **sí está soportado** con el motor 3D original de Nokia en C (`runtime-m3g/`,
+  licencia EPL 1.0, adaptado a Android por J2ME Loader). Solo se incluye en los ports de juegos 3D y
+  Android Studio lo compila con el NDK. MascotCapsule 3D todavía no.
 - **APIs de fabricante poco comunes** (Siemens, Motorola, Sony Ericsson específicas): no implementadas.
 - **SMS (JSR-120), Bluetooth (JSR-82), FileConnection (JSR-75), ubicación (JSR-179)**: no implementadas.
 - Tonos Nokia en formato *Smart Messaging* (`Sound.FORMAT_TONE` con bytes) se ignoran en silencio.

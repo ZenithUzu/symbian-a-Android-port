@@ -53,14 +53,14 @@ def family(cls):
 def runtime_index():
     """Maps internal class name -> Java source text for the bundled runtime."""
     idx = {}
-    root = os.path.join(paths.runtime_dir(), "src", "main", "java")
-    for d, _, files in os.walk(root):
-        for f in files:
-            if f.endswith(".java"):
-                full = os.path.join(d, f)
-                rel = os.path.relpath(full, root)[:-5].replace(os.sep, "/")
-                with open(full, encoding="utf-8") as fh:
-                    idx[rel] = fh.read()
+    for root in paths.java_source_roots():
+        for d, _, files in os.walk(root):
+            for f in files:
+                if f.endswith(".java"):
+                    full = os.path.join(d, f)
+                    rel = os.path.relpath(full, root)[:-5].replace(os.sep, "/")
+                    with open(full, encoding="utf-8") as fh:
+                        idx[rel] = fh.read()
     return idx
 
 
@@ -132,6 +132,7 @@ def analyze(jar, jad=None):
         "screen_hints": suite.screen_hints(),
         "orientation_hint": suite.orientation_hint(),
         "uses_network": any(c.startswith("javax/microedition/io/") for c in used),
+        "uses_m3g": any(c.startswith("javax/microedition/m3g/") for c in used),
         "touch": bool(touch_classes),
         "keypad_hint": keypad_hint(suite.attrs, bool(touch_classes)),
     }
@@ -226,6 +227,8 @@ def print_report(r):
         p("Táctil: el juego pide solo cruceta en pantalla -> teclado mínimo")
     elif ask:
         p("Táctil: el juego acepta toques -> el APK preguntará la primera vez si mostrar el teclado")
+    if r["uses_m3g"]:
+        p("3D (M3G): se incluye el motor 3D nativo de Nokia (C). Android Studio necesitará el NDK")
     if r["uses_network"]:
         p("Usa red (javax.microedition.io): se añadirá el permiso INTERNET")
     p("")

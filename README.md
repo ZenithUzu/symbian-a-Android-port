@@ -135,8 +135,9 @@ Más detalle:
 MIDP 2.0 completo para juegos (Canvas, GameCanvas, Graphics, Image, Font, Sprite, TiledLayer,
 LayerManager, Form/List/TextBox/Alert y sus Items), RMS, MMAPI (MIDI/WAV/MP3/AMR/OGG + tonos y
 ToneControl), HTTP, Nokia UI (FullCanvas, DirectGraphics, DirectUtils, DeviceControl, Sound) y
-Samsung (AudioClip, Vibration, LCDLight). No soportados aún: M3G/MascotCapsule (3D), SMS,
-Bluetooth, FileConnection.
+Samsung (AudioClip, Vibration, LCDLight), y **3D M3G (JSR-184)** con el motor nativo de Nokia en C
+(solo en los ports de juegos 3D; requiere el NDK, que Android Studio instala). No soportados aún:
+MascotCapsule (3D), SMS, Bluetooth, FileConnection.
 
 ## Estructura del repositorio
 
