@@ -26,7 +26,7 @@ python tool/j2a.py doctor      # comprueba Java, SDK y descompiladores
 
 ## Uso con interfaz (lo más fácil)
 
-Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`).
+Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`). En Windows, si no abre o sale un error de "Python Launcher", usa **`j2a-gui.bat`**: muestra el error en vez de cerrarse.
 
 1. **Juego (.jar) → Elegir…** y selecciona el juego.
 2. Ajusta resolución, rotación, shader, FPS y teclado si quieres. Lo automático suele bastar.
