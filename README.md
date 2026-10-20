@@ -24,7 +24,18 @@ cd symbian-a-Android-port
 python tool/j2a.py doctor      # comprueba Java, SDK y descompiladores
 ```
 
-## Uso rápido
+## Uso con interfaz (lo más fácil)
+
+Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`).
+
+1. **Juego (.jar) → Elegir…** y selecciona el juego.
+2. Ajusta resolución, rotación, shader, FPS y teclado si quieres. Lo automático suele bastar.
+3. **Generar port**.
+4. **Abrir carpeta** y ábrela en Android Studio (File → Open) → Run ▶.
+
+La ventana usa los mismos comandos de abajo, así que el resultado es idéntico.
+
+## Uso rápido por comandos
 
 ```bash
 # 1. ¿Qué hay dentro y qué tan portable es?
