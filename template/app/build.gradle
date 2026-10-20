@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+// APK file name: <Game_Name>-<version>-debug.apk / -release.apk
+base {
+    archivesName = '@@APK_NAME@@'
+}
+
 android {
     namespace = '@@PACKAGE@@'
     compileSdk = 37

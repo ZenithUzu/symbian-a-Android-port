@@ -46,7 +46,7 @@ public class J2meActivity extends Activity {
         Config cfg = Config.load(port);
         Settings.apply(this, cfg);
         onConfigLoaded(cfg);
-        Host.applyOrientation(this, cfg.orientation);
+        Host.applyOrientation(this);
         if (Build.VERSION.SDK_INT >= 33) registerBackCallback();
 
         FrameLayout root = new FrameLayout(this);

@@ -20,17 +20,41 @@ def log(msg):
     print(msg, flush=True)
 
 
-def sanitize_package(text):
-    parts = []
-    for seg in re.split(r"[^A-Za-z0-9]+", text.lower()):
-        if not seg:
-            continue
-        if seg[0].isdigit():
-            seg = "g" + seg
-        if seg in JAVA_KEYWORDS:
-            seg += "_"
-        parts.append(seg)
-    return ".".join(parts[:3]) or "game"
+def _segment(text, words=None):
+    """One package segment from free text: 'Gameloft S.A.' -> 'gameloft'."""
+    ws = re.findall(r"[a-z0-9]+", (text or "").lower())
+    if words:
+        ws = ws[:words]
+    seg = "".join(ws)
+    if not seg:
+        return ""
+    if seg[0].isdigit():
+        seg = "g" + seg
+    return seg + "_" if seg in JAVA_KEYWORDS else seg
+
+
+def official_package(suite, midlet_class):
+    """applicationId from the game itself: the MIDlet's own package (com.gameloft.sonic) when it
+    has a real one, otherwise com.<publisher>.<game> from MIDlet-Vendor / MIDlet-Name."""
+    if midlet_class and "." in midlet_class:
+        pkg = midlet_class.rsplit(".", 1)[0].lower()
+        segs = pkg.split(".")
+        if len(segs) >= 2 and all(re.match(r"^[a-z][a-z0-9_]{1,}$", x) and x not in JAVA_KEYWORDS for x in segs) \
+                and not pkg.startswith(("javax.", "java.", "com.nokia.", "com.sun.")):
+            # 'com.glu' alone would be shared by every game of that publisher (same app id = one
+            # replaces the other on the phone), so add the game name
+            return pkg if len(segs) >= 3 else pkg + "." + (_segment(suite.name) or "game")
+    vendor = _segment(suite.vendor, 1)
+    if len(vendor) <= 2:
+        vendor = _segment(suite.vendor, 2)
+    name = _segment(suite.name) or "game"
+    return "com.%s.%s" % (vendor or "j2me", name)
+
+
+def display_file_name(text):
+    """Folder/APK name from the official game name, safe on Windows."""
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", text or "").strip().strip(".")
+    return re.sub(r"\s+", "_", name) or "game"
 
 
 def prop_escape(s, key=False):
@@ -203,11 +227,11 @@ def port(args):
 
     sw, sh, why = pick_screen(args, report)
     orientation = args.orientation or report["orientation_hint"] or ("landscape" if sw > sh else "portrait")
-    package = args.package or "port." + sanitize_package(suite.name)
+    package = args.package or official_package(suite, midlet_class)
     if not re.match(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$", package):
         raise SystemExit("Nombre de paquete inválido: %s" % package)
 
-    out = os.path.abspath(args.output or sanitize_package(suite.name).replace(".", "_") + "-android")
+    out = os.path.abspath(args.output or display_file_name(app_name) + "-android")
     if os.path.exists(out) and os.listdir(out):
         if not args.force:
             raise SystemExit("La carpeta %s ya existe y no está vacía (usa --force para reemplazarla)" % out)
@@ -289,6 +313,7 @@ def port(args):
         "@@PACKAGE@@": package,
         "@@PACKAGE_PATH@@": package.replace(".", os.sep),
         "@@VERSION_NAME@@": suite.version,
+        "@@APK_NAME@@": display_file_name(app_name) + "-" + re.sub(r"[^0-9A-Za-z.]", "", suite.version or "1.0"),
         "@@VERSION_CODE@@": str(max(1, int(re.sub(r"\D", "", suite.version.split(".")[0]) or 1))),
         "@@ORIENTATION@@": {"portrait": "userPortrait", "landscape": "userLandscape"}.get(orientation, "fullUser"),
         "@@PERMISSIONS@@": ("<uses-permission android:name=\"android.permission.INTERNET\" />"
@@ -376,6 +401,8 @@ def _port_items(midlet_class, sw, sh, args):
         ("scale.mode", args.scale),
         ("# Si el juego solo dibuja una parte de la pantalla (p. ej. 176x208), mostrar solo esa parte y girar", None),
         ("auto.fit", "true"),
+        ("# 90 / 270 = el juego dibuja de lado (se juega en horizontal en un teléfono vertical)", None),
+        ("rotate", args.rotate),
         ("# nearest | smooth | sharp | scanlines | lcd | crt | mono | file:<sección de assets/shaders/*.ini>", None),
         ("shader", args.shader or ("smooth" if args.filter else "nearest")),
         ("# vsync = sincronizado | dynamic = la pantalla adapta su Hz a los FPS del juego | unlimited", None),

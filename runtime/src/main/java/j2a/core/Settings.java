@@ -24,6 +24,7 @@ final class Settings {
         c.screenHeight = p.getInt("screen.height", c.screenHeight);
         c.orientation = p.getString("orientation", c.orientation);
         c.autoFit = p.getBoolean("auto.fit", c.autoFit);
+        c.rotate = p.getInt("rotate", c.rotate);
     }
 
     /** Area detected by AutoFit for a given virtual screen ("" = not decided, "none" = full screen). */
@@ -48,6 +49,7 @@ final class Settings {
                 .putBoolean("sound", c.sound)
                 .putString("orientation", c.orientation)
                 .putBoolean("auto.fit", c.autoFit)
+                .putInt("rotate", c.rotate)
                 .apply();
     }
 

@@ -26,6 +26,10 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido | `fps.limit=30` |
 | Resolución elegible en el APK, incluido **widescreen** con la proporción del móvil (requiere reiniciar; útil en juegos que leen `getWidth()/getHeight()`) | menú del port |
 | Rotación elegible en el APK (automática/vertical/horizontal) | menú del port |
+| **Girar imagen 90°/270°** para juegos que se juegan de lado en un teléfono vertical: la app pasa a horizontal de verdad (barra de notificaciones y gestos correctos) y el táctil se gira también | `rotate`, `--rotate`, menú |
+| Zonas que el juego nunca dibuja se ven negras (no blancas); el ajuste automático también recorta contenido centrado (p. ej. en la resolución widescreen de un juego que no se adapta) | automático |
+| Entrada con baja latencia: toques sin esperar al siguiente frame (Android 11+), el hilo de eventos del juego nunca espera a la GPU y tiene prioridad de pantalla; el modo de FPS dinámico no baja de 60 Hz | automático |
+| Nombre oficial: el paquete sale del propio juego (`com.sega.sonic`) o de su editor (`com.gameloft.sonicunleashed`); la carpeta y el APK se llaman como el juego (`Sonic_Unleashed-1.0.0-debug.apk`) | automático, `--package` |
 | Soft keys de otros fabricantes (Motorola -21/-22, Siemens -1/-4, LG -202/-203) | `softkey.left`, `softkey.right` |
 | Contador de FPS | `show.fps=true` |
 | Formularios, listas y cajas de texto con controles nativos de Android y teclado del sistema | automático |

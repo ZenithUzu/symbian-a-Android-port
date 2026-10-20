@@ -112,6 +112,11 @@ public class Image {
         bitmap.getPixels(rgbData, offset, scanlength, x, y, width, height);
     }
 
+    /** Screen-sized buffer: black instead of MIDP's white, so areas a game never draws look like bars. */
+    public static Image j2aCreateScreen(int w, int h) {
+        return j2aCreateMutable(w, h, 0xFF000000);
+    }
+
     /** Mutable image filled with an ARGB color (Nokia DirectUtils). Not part of MIDP. */
     public static Image j2aCreateMutable(int w, int h, int argb) {
         Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);

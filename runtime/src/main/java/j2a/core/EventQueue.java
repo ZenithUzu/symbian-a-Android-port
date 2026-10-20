@@ -68,6 +68,8 @@ public final class EventQueue implements Runnable {
     }
 
     public void run() {
+        // input + paint thread: above normal game threads so key/touch events are handled promptly
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY);
         while (running) {
             Runnable r = null;
             synchronized (lock) {

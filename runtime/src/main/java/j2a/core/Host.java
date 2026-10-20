@@ -66,7 +66,7 @@ public final class Host {
         screenContainer = container;
         if (screenImage != null) return; // activity re-created, process alive
         installCrashPolicy();
-        screenImage = Image.createImage(cfg.screenWidth, cfg.screenHeight);
+        screenImage = Image.j2aCreateScreen(cfg.screenWidth, cfg.screenHeight);
         screenGraphics = screenImage.getGraphics();
         screenGraphics.j2aTrack();
         AutoFit.start();
@@ -200,6 +200,17 @@ public final class Host {
 
     /** True while the activity is in the background (Android 17 blocks background audio). */
     public static boolean isPaused() { return paused; }
+
+    /** Orientation from the player's choice, else from image rotation (sideways games -> landscape). */
+    static void applyOrientation(Activity a) {
+        if (cfg.orientation.length() > 0) applyOrientation(a, cfg.orientation);
+        else if (cfg.rotate == 90 || cfg.rotate == 270) applyOrientation(a, "landscape");
+        else {
+            try { // back to the orientation the port was generated with (AndroidManifest)
+                a.setRequestedOrientation(a.getPackageManager().getActivityInfo(a.getComponentName(), 0).screenOrientation);
+            } catch (Exception ignored) {}
+        }
+    }
 
     static void applyOrientation(Activity a, String o) {
         // 13 FULL_USER, 12 USER_PORTRAIT, 11 USER_LANDSCAPE; "" keeps the manifest value
@@ -416,6 +427,7 @@ public final class Host {
                         "Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"),
                         "Sonido: " + (cfg.sound ? "sí" : "no"),
                         "Ajuste automático de resolución: " + (cfg.autoFit ? "sí" : "no"),
+                        "Girar imagen del juego: " + (cfg.rotate == 0 ? "no" : cfg.rotate + "°"),
                         "Captura de pantalla",
                         "Restablecer opciones",
                         "Salir del juego"
@@ -475,8 +487,15 @@ public final class Host {
                                         cfg.autoFit = !cfg.autoFit;
                                         if (!cfg.autoFit) AutoFit.disable();
                                         break;
-                                    case 12: Screenshot.save(activity, gl.snapshot()); return;
-                                    case 13:
+                                    case 12:
+                                        pick("Girar imagen del juego", new String[]{"No girar",
+                                                        "90° (juegos que se juegan de lado, girando a la derecha)",
+                                                        "270° (juegos que se juegan de lado, girando a la izquierda)"},
+                                                new String[]{"0", "90", "270"}, String.valueOf(cfg.rotate),
+                                                new Runnable() { public void run() { applyOrientation(activity); } }, "rotate");
+                                        return;
+                                    case 13: Screenshot.save(activity, gl.snapshot()); return;
+                                    case 14:
                                         Settings.reset(activity);
                                         new AlertDialog.Builder(activity)
                                                 .setMessage("Opciones restablecidas. Se aplican al volver a abrir el juego.")
@@ -486,7 +505,7 @@ public final class Host {
                                                 .setNegativeButton("Más tarde", null)
                                                 .show();
                                         return;
-                                    case 14: requestExit(); return;
+                                    case 15: requestExit(); return;
                                 }
                                 settingsChanged();
                             }
@@ -545,6 +564,7 @@ public final class Host {
                         else if (field.equals("shader")) { cfg.shader = v; gl.requestRender(); }
                         else if (field.equals("fpsMode")) cfg.fpsMode = v;
                         else if (field.equals("alpha")) cfg.keypadAlpha = Integer.parseInt(v);
+                        else if (field.equals("rotate")) cfg.rotate = Integer.parseInt(v);
                         if (after != null) after.run();
                         settingsChanged();
                     }
@@ -558,7 +578,8 @@ public final class Host {
                 {360, 640}, {640, 360}, {0, 0}};
         String[] labels = new String[sizes.length];
         for (int i = 0; i < sizes.length - 1; i++) labels[i] = sizes[i][0] + "x" + sizes[i][1];
-        labels[sizes.length - 1] = "Widescreen (proporción de este móvil)";
+        labels[sizes.length - 1] = "Widescreen real (solo juegos que se adaptan a la pantalla; "
+                + "para llenar la pantalla en los demás usa Escalado > Estirar)";
         new AlertDialog.Builder(activity)
                 .setTitle("Resolución del juego")
                 .setItems(labels, new DialogInterface.OnClickListener() {

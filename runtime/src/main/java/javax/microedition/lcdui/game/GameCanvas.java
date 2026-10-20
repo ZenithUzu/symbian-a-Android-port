@@ -20,7 +20,7 @@ public abstract class GameCanvas extends Canvas {
     private final Image buffer;
 
     protected GameCanvas(boolean suppressKeyEvents) {
-        buffer = Image.createImage(Host.cfg.screenWidth, Host.cfg.screenHeight);
+        buffer = Image.j2aCreateScreen(Host.cfg.screenWidth, Host.cfg.screenHeight);
         j2aSetSuppress(suppressKeyEvents);
     }
 

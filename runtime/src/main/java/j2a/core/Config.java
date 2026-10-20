@@ -16,6 +16,8 @@ public final class Config {
     public boolean filter = false;
     /** Post-processing shader id (see Shaders) or "file:<section>" from assets/shaders/*.ini. */
     public String shader = "nearest";
+    /** Rotate the game image 0/90/270 degrees (games that draw sideways for landscape play). */
+    public int rotate = 0;
     /** Shrink the shown area to what a fixed-resolution game really draws (see AutoFit). */
     public boolean autoFit = true;
     /** vsync | dynamic | unlimited (see GlScreen). */
@@ -55,6 +57,7 @@ public final class Config {
         c.shader = s(p, "shader", c.filter ? "smooth" : "nearest");
         c.fpsMode = s(p, "fps.mode", c.fpsMode);
         c.autoFit = b(p, "auto.fit", c.autoFit);
+        c.rotate = i(p, "rotate", c.rotate);
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
         c.keypadAsk = b(p, "keypad.ask", c.keypadAsk);

@@ -158,6 +158,8 @@ def main(argv=None):
     s.add_argument("--midlet-class", help="clase MIDlet si el manifiesto no la declara")
     s.add_argument("--screen", help="resolución virtual, p. ej. 240x320, 176x208, 360x640")
     s.add_argument("--orientation", choices=["portrait", "landscape", "auto"])
+    s.add_argument("--rotate", type=int, choices=[0, 90, 270], default=0,
+                   help="girar la imagen: para juegos que dibujan de lado (horizontal en un teléfono vertical)")
     s.add_argument("--scale", choices=["fit", "integer", "stretch"], default="fit")
     s.add_argument("--filter", action="store_true", help="atajo de --shader smooth")
     s.add_argument("--shader", help="shader por defecto: nearest, smooth, sharp, scanlines, lcd, crt, mono "

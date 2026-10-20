@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "too
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog, messagebox, ttk  # noqa: E402
 
-from j2a_tool import cli  # noqa: E402
+from j2a_tool import cli, generate  # noqa: E402
+from j2a_tool.jarinfo import MidletSuite  # noqa: E402
 
 # (texto visible, valor del comando); None = no pasar la opción (j2a decide/detecta)
 MODES = [("Código editable (recomendado)", "source"), ("Bytecode original (máxima fidelidad)", "jar")]
@@ -29,6 +30,8 @@ SHADERS = [("Píxeles nítidos", "nearest"), ("Nítido sin deformar (sharp)", "s
 FPS_MODES = [("Sincronizado (vsync)", "vsync"), ("Dinámico (la pantalla se adapta)", "dynamic"),
              ("Sin límite", "unlimited")]
 FPS_LIMITS = [("Sin límite", "0"), ("15", "15"), ("20", "20"), ("25", "25"), ("30", "30"), ("60", "60")]
+ROTATIONS = [("No", "0"), ("90° (el juego dibuja de lado, girar a la derecha)", "90"),
+             ("270° (el juego dibuja de lado, girar a la izquierda)", "270")]
 KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruceta + números)", "full"),
            ("Cruceta + OK", "minimal"), ("Sin teclado (el juego trae controles táctiles)", "none")]
 
@@ -36,7 +39,7 @@ KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruc
 def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
     a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
-         "--fps-mode", v["fps_mode"], "--fps", v["fps"]]
+         "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--rotate", v.get("rotate") or "0"]
     for key, flag in (("keypad", "--keypad"), ("screen", "--screen"), ("orientation", "--orientation"), ("name", "--name"),
                       ("package", "--package"), ("shaders", "--shaders")):
         if v.get(key):
@@ -79,6 +82,7 @@ class App(tk.Tk):
         r = self.combo_row(f, r, "Modo", "mode", MODES)
         r = self.combo_row(f, r, "Resolución", "screen", SCREENS)
         r = self.combo_row(f, r, "Rotación", "orientation", ORIENTATIONS)
+        r = self.combo_row(f, r, "Girar imagen", "rotate", ROTATIONS)
         r = self.combo_row(f, r, "Shader", "shader", SHADERS)
         r = self.combo_row(f, r, "Modo de FPS", "fps_mode", FPS_MODES)
         r = self.combo_row(f, r, "Límite de FPS", "fps", FPS_LIMITS)
@@ -141,8 +145,11 @@ class App(tk.Tk):
         if p:
             self.vars["jar"].set(p)
             if not self.vars["out"].get():
-                base = os.path.splitext(os.path.basename(p))[0]
-                self.vars["out"].set(os.path.join(os.path.dirname(p), base + "-android"))
+                try:  # official game name from the manifest, not the downloaded file name
+                    name = generate.display_file_name(MidletSuite(p).name)
+                except Exception:  # noqa: BLE001 - unreadable jar: analyze will explain
+                    name = os.path.splitext(os.path.basename(p))[0]
+                self.vars["out"].set(os.path.join(os.path.dirname(p), name + "-android"))
 
     def pick_out(self):
         p = filedialog.askdirectory(title="Carpeta donde guardar el proyecto")
@@ -175,7 +182,7 @@ class App(tk.Tk):
             messagebox.showwarning("j2a", "Elige dónde guardar el proyecto.")
             return
         v = {k: self.value(k) for k in ("jar", "out", "name", "package", "mode", "screen", "orientation",
-                                        "shader", "fps_mode", "fps", "keypad", "shaders")}
+                                        "shader", "fps_mode", "fps", "keypad", "shaders", "rotate")}
         v["force"] = self.vars["force"].get()
         self.run(build_args(v), done=lambda ok: ok and messagebox.showinfo(
             "j2a", "Proyecto listo.\n\nAbre la carpeta en Android Studio (File > Open) y pulsa Run ▶."))

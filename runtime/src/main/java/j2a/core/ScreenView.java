@@ -171,7 +171,8 @@ public class ScreenView extends View {
     private void fit(int ax, int ay, int aw, int ah) {
         Config c = Host.cfg;
         Rect area = AutoFit.area();
-        int sw = area.width(), sh = area.height();
+        boolean turned = c.rotate == 90 || c.rotate == 270;
+        int sw = turned ? area.height() : area.width(), sh = turned ? area.width() : area.height();
         aw -= ax;
         ah -= ay;
         int w, h;
@@ -254,6 +255,9 @@ public class ScreenView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN && android.os.Build.VERSION.SDK_INT >= 30) {
+            requestUnbufferedDispatch(e); // touches reach the game without waiting for the next frame
+        }
         if (controllerActive && action == MotionEvent.ACTION_DOWN) {
             setControllerActive(false);
             return true;
@@ -304,7 +308,7 @@ public class ScreenView extends View {
             touches.put(id, b);
             press(b);
         } else if (dst.contains((int) x, (int) y)) {
-            int[] p = {vx(x), vy(y)};
+            int[] p = map(x, y);
             gamePointers.put(id, p);
             Host.pointer(0, id, p[0], p[1]);
         }
@@ -323,7 +327,8 @@ public class ScreenView extends View {
         }
         int[] p = gamePointers.get(id);
         if (p == null) return;
-        int gx = vx(x), gy = vy(y);
+        int[] m = map(x, y);
+        int gx = m[0], gy = m[1];
         if (gx == p[0] && gy == p[1]) return; // MOVE batches include fingers that didn't move
         p[0] = gx;
         p[1] = gy;
@@ -340,7 +345,8 @@ public class ScreenView extends View {
         int[] p = gamePointers.get(id);
         if (p == null) return;
         gamePointers.remove(id);
-        Host.pointer(2, id, vx(x), vy(y));
+        int[] m = map(x, y);
+        Host.pointer(2, id, m[0], m[1]);
         // Most of these games were written for one finger: a release often clears every touch
         // control. Remind the game about the fingers that are still down.
         for (int i = 0; i < gamePointers.size(); i++) {
@@ -363,17 +369,16 @@ public class ScreenView extends View {
         redraw();
     }
 
-    private int vx(float x) {
-        int w = Math.max(1, dst.width());
+    /** View point -> game pixel, undoing scaling, AutoFit cropping and image rotation. */
+    private int[] map(float x, float y) {
+        float nx = (x - dst.left) / Math.max(1f, dst.width());
+        float ny = (y - dst.top) / Math.max(1f, dst.height());
+        float u, v;
+        if (Host.cfg.rotate == 90) { u = ny; v = 1 - nx; }
+        else if (Host.cfg.rotate == 270) { u = 1 - ny; v = nx; }
+        else { u = nx; v = ny; }
         Rect a = AutoFit.area();
-        int v = a.left + (int) ((x - dst.left) * a.width() / w);
-        return Math.max(a.left, Math.min(a.right - 1, v));
-    }
-
-    private int vy(float y) {
-        int h = Math.max(1, dst.height());
-        Rect a = AutoFit.area();
-        int v = a.top + (int) ((y - dst.top) * a.height() / h);
-        return Math.max(a.top, Math.min(a.bottom - 1, v));
+        int gx = a.left + (int) (u * a.width()), gy = a.top + (int) (v * a.height());
+        return new int[]{Math.max(a.left, Math.min(a.right - 1, gx)), Math.max(a.top, Math.min(a.bottom - 1, gy))};
     }
 }

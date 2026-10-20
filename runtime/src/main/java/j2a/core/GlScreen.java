@@ -76,14 +76,18 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (staging == null) return null;
             Rect a = AutoFit.area();
             a.intersect(0, 0, staging.getWidth(), staging.getHeight());
-            return Bitmap.createBitmap(staging, a.left, a.top, a.width(), a.height());
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            m.postRotate(Host.cfg.rotate);
+            return Bitmap.createBitmap(staging, a.left, a.top, a.width(), a.height(), m, false);
         }
     }
 
     /** Called with every finished game frame, from any thread. */
     public void present(Bitmap frame) {
         Config c = Host.cfg;
-        boolean gameThread = Looper.myLooper() != Looper.getMainLooper();
+        // The J2ME event thread (Canvas.paint) also delivers key/touch events: never make it
+        // wait for the GPU, or input queues up behind frames and controls feel laggy.
+        boolean gameThread = Looper.myLooper() != Looper.getMainLooper() && !Host.events.isEventThread();
         if (gameThread && c.fpsLimit > 0) pace(c.fpsLimit);
         synchronized (lock) {
             if (gameThread && !"unlimited".equals(c.fpsMode)) {
@@ -132,7 +136,8 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     /** Surface.setFrameRate(rate, FRAME_RATE_COMPATIBILITY_DEFAULT) on Android 11+ (reflection: old SDKs). */
     private void matchRefreshRate(int gameFps) {
         if (Build.VERSION.SDK_INT < 30 || gameFps <= 0) return;
-        float rate = gameFps <= 32 ? 30f : gameFps <= 50 ? 48f : gameFps <= 64 ? 60f : gameFps <= 95 ? 90f : 120f;
+        // never below 60 Hz: at 30/48 Hz touch and the on-screen keypad visibly lag
+        float rate = gameFps <= 64 ? 60f : gameFps <= 95 ? 90f : 120f;
         if (rate == requestedRate) return;
         requestedRate = rate;
         try {
@@ -211,7 +216,13 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     private void setTexCoords(Rect a) {
         float u0 = a.left / (float) texW, u1 = a.right / (float) texW;
         float v0 = a.top / (float) texH, v1 = a.bottom / (float) texH;
-        quad.put(2, u0).put(3, v1).put(6, u1).put(7, v1).put(10, u0).put(11, v0).put(14, u1).put(15, v0);
+        // corners of the game image: top-left, top-right, bottom-left, bottom-right
+        float[] tl = {u0, v0}, tr = {u1, v0}, bl = {u0, v1}, br = {u1, v1};
+        float[][] c; // what goes at screen BL, BR, TL, TR
+        if (Host.cfg.rotate == 90) c = new float[][]{br, tr, bl, tl};        // clockwise
+        else if (Host.cfg.rotate == 270) c = new float[][]{tl, bl, tr, br};  // counter-clockwise
+        else c = new float[][]{bl, br, tl, tr};
+        for (int i = 0; i < 4; i++) quad.put(i * 4 + 2, c[i][0]).put(i * 4 + 3, c[i][1]);
     }
 
     private void loadShader(String id) {
