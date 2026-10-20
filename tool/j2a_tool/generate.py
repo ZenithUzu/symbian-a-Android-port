@@ -229,6 +229,14 @@ def port(args):
     # ------------------------------------------------ decide what becomes source
     source_classes = set()
     src_tmp = os.path.join(work, "decompiled")
+    if args.mode in ("source", "hybrid") and not args.no_verify \
+            and not decompile.runtime_classes_jar(paths.find_android_jar()):
+        # Unverified decompiled code often doesn't compile (obfuscators reuse names in ways Java
+        # source can't express), so never hand out a project that won't build.
+        log("  Aviso: no encontré el Android SDK o javac (instala Android Studio y la plataforma del SDK),")
+        log("         así que no puedo comprobar el código descompilado. Uso el bytecode original (modo jar),")
+        log("         que siempre compila. Vuelve a generar cuando el SDK esté instalado para tener código editable.")
+        args.mode = "jar"
     if args.mode in ("source", "hybrid"):
         only = None
         if args.mode == "hybrid":
@@ -251,25 +259,23 @@ def port(args):
             log("  Ajustes automáticos de sintaxis en %d archivo(s)" % n_fixed)
         if args.no_verify:
             log("  Verificación de compilación omitida (--no-verify)")
-        elif not rt_jar:
-            log("  Aviso: no encontré el Android SDK/javac; no puedo verificar que el código compile.")
-            log("         Si Android Studio marca errores en una clase, vuelve a generar con")
-            log("         --mode hybrid o --keep-bytecode Clase para dejarla como bytecode.")
         else:
-            for attempt in range(6):
+            attempt = 0
+            while source_classes:  # each round removes >= 1 class, so this always ends
+                attempt += 1
                 check_dir = os.path.join(work, "check-src")
                 shutil.rmtree(check_dir, ignore_errors=True)
                 for c in source_classes:
                     dst = os.path.join(check_dir, c.replace("/", os.sep) + ".java")
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     shutil.copyfile(files[c], dst)
-                bad = decompile.compile_check(check_dir, android_jar, [rt_jar, patched_all])
+                bad = decompile.compile_check(check_dir, android_jar, [rt_jar, patched_all]) & source_classes
                 shutil.rmtree(check_dir, ignore_errors=True)
                 if not bad:
                     log("  Verificación: las %d clases en código fuente compilan" % len(source_classes))
                     break
                 log("  Verificación %d: %d clase(s) con errores de compilación -> bytecode (%s)" % (
-                    attempt + 1, len(bad), ", ".join(sorted(bad)[:8])))
+                    attempt, len(bad), ", ".join(sorted(bad)[:8])))
                 source_classes -= bad
         if args.keep_bytecode:
             keep = set(c.strip().replace(".", "/") for c in args.keep_bytecode.split(",") if c.strip())
