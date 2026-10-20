@@ -21,7 +21,8 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | En segundo plano el juego no consume CPU aunque su bucle no tenga `sleep()` | automático |
 | Teclado virtual multitáctil: cruceta con diagonales (1/3/7/9), teclado numérico, soft keys con el nombre del comando | `keypad=full|minimal|none`, `keypad.alpha`, `keypad.haptics` |
 | Mandos y teclados físicos (cruceta, A/B/X/Y, L1/R1, Start/Select, WASD, números) | automático |
-| Pantalla táctil enviada al juego como `pointerPressed/Dragged/Released` | automático |
+| Pantalla táctil **multitáctil**: cada dedo llega al juego (`pointerPressed/Dragged/Released` + `com.nokia.pointer.number` como en la API multipunto de Nokia), así se puede mover y saltar a la vez en los controles táctiles del propio juego | automático |
+| Juegos táctiles: si el manifiesto dice `Nokia-MIDlet-On-Screen-Keypad: no` no se muestra teclado; si el juego acepta toques, la primera vez pregunta "¿mostrar teclado?". Sin teclado queda un ☰ pequeño para el menú | `keypad`, `keypad.ask`, menú |
 | Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido | `fps.limit=30` |
 | Resolución elegible en el APK, incluido **widescreen** con la proporción del móvil (requiere reiniciar; útil en juegos que leen `getWidth()/getHeight()`) | menú del port |
 | Rotación elegible en el APK (automática/vertical/horizontal) | menú del port |

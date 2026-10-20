@@ -24,7 +24,9 @@ public class ScreenView extends View {
         final RectF r = new RectF();
         final int code;
         final String label;
-        final int kind; // 0 normal, 1 soft left, 2 soft right, 3 port menu, 4 secondary
+        final int kind; // 0 normal, 1 soft left, 2 soft right, 3 port menu, 4 secondary, 5 floating menu
+
+        boolean menu() { return kind == 3 || kind == 5; }
         boolean pressed;
 
         Button(float l, float t, float rr, float b, int code, String label, int kind) {
@@ -41,7 +43,6 @@ public class ScreenView extends View {
     private final Rect dst = new Rect();
     private final ArrayList<Button> buttons = new ArrayList<Button>();
     private final SparseArray<Button> touches = new SparseArray<Button>();
-    private int screenPointer = -1;
     private final float density;
     /** Keypad hidden because a gamepad/keyboard is being used; any touch brings it back. */
     private volatile boolean controllerActive;
@@ -103,7 +104,7 @@ public class ScreenView extends View {
         float radius = 10 * density;
         for (int i = 0; i < buttons.size(); i++) {
             Button b = buttons.get(i);
-            int base = b.kind == 4 ? alpha / 2 : alpha;
+            int base = b.kind == 4 ? alpha / 2 : b.kind == 5 ? Math.min(alpha, 90) : alpha;
             fill.setColor(b.pressed ? Color.argb(Math.min(255, base + 60), 120, 170, 255)
                     : Color.argb(base / 3, 255, 255, 255));
             stroke.setColor(Color.argb(base, 255, 255, 255));
@@ -139,6 +140,7 @@ public class ScreenView extends View {
             float pad = 6 * density;
             if (!keypad) {
                 fit(0, 0, w, h);
+                addFloatingMenu(w, h);
             } else if (h >= w) {
                 fit(0, 0, w, (int) (h * 0.62f));
                 float top = dst.bottom + pad;
@@ -191,6 +193,18 @@ public class ScreenView extends View {
         float in = 3 * density;
         if (r - l <= 2 * in || b - t <= 2 * in) return;
         buttons.add(new Button(l + in, t + in, r - in, b - in, code, label, kind));
+    }
+
+    /**
+     * Without keypad the menu stays reachable through a small ☰: in the black bars when there
+     * is room, otherwise faded in the top corner (the game keeps every other touch).
+     */
+    private void addFloatingMenu(int w, int h) {
+        float s = 40 * density;
+        if (dst.top >= s) add(w - s, 0, w, s, 0, "\u2630", 5);
+        else if (w - dst.right >= s) add(w - s, 0, w, s, 0, "\u2630", 5);
+        else if (dst.left >= s) add(0, 0, s, s, 0, "\u2630", 5);
+        else add(w - s * 0.8f, 0, w, s * 0.8f, 0, "\u2630", 5);
     }
 
     private void addSoftRow(float l, float t, float r, float b) {
@@ -277,14 +291,22 @@ public class ScreenView extends View {
         return null;
     }
 
+    /**
+     * Fingers on the game image, by Android pointer id -> last game coordinates. Every finger is
+     * sent to the game (Nokia multipoint style: System.getProperty("com.nokia.pointer.number")
+     * tells which one), so on-screen pads drawn by touch games work with two or more fingers.
+     */
+    private final SparseArray<int[]> gamePointers = new SparseArray<int[]>();
+
     private void down(int id, float x, float y) {
         Button b = hit(x, y);
         if (b != null) {
             touches.put(id, b);
             press(b);
-        } else if (screenPointer == -1 && dst.contains((int) x, (int) y)) {
-            screenPointer = id;
-            Host.pointer(0, vx(x), vy(y));
+        } else if (dst.contains((int) x, (int) y)) {
+            int[] p = {vx(x), vy(y)};
+            gamePointers.put(id, p);
+            Host.pointer(0, id, p[0], p[1]);
         }
     }
 
@@ -292,14 +314,20 @@ public class ScreenView extends View {
         Button old = touches.get(id);
         if (old != null) {
             Button nb = hit(x, y);
-            if (nb != null && nb != old && old.kind != 3 && nb.kind != 3) {
+            if (nb != null && nb != old && !old.menu() && !nb.menu()) { // slide between keys
                 release(old);
                 touches.put(id, nb);
                 press(nb);
             }
-        } else if (id == screenPointer) {
-            Host.pointer(1, vx(x), vy(y));
+            return;
         }
+        int[] p = gamePointers.get(id);
+        if (p == null) return;
+        int gx = vx(x), gy = vy(y);
+        if (gx == p[0] && gy == p[1]) return; // MOVE batches include fingers that didn't move
+        p[0] = gx;
+        p[1] = gy;
+        Host.pointer(1, id, gx, gy);
     }
 
     private void up(int id, float x, float y) {
@@ -307,23 +335,31 @@ public class ScreenView extends View {
         if (b != null) {
             touches.remove(id);
             release(b);
-        } else if (id == screenPointer) {
-            screenPointer = -1;
-            Host.pointer(2, vx(x), vy(y));
+            return;
+        }
+        int[] p = gamePointers.get(id);
+        if (p == null) return;
+        gamePointers.remove(id);
+        Host.pointer(2, id, vx(x), vy(y));
+        // Most of these games were written for one finger: a release often clears every touch
+        // control. Remind the game about the fingers that are still down.
+        for (int i = 0; i < gamePointers.size(); i++) {
+            int[] q = gamePointers.valueAt(i);
+            Host.pointer(1, gamePointers.keyAt(i), q[0], q[1]);
         }
     }
 
     private void press(Button b) {
         b.pressed = true;
         if (Host.cfg.haptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-        if (b.kind == 3) Host.showPortMenu();
+        if (b.menu()) Host.showPortMenu();
         else Host.key(0, b.code);
         redraw();
     }
 
     private void release(Button b) {
         b.pressed = false;
-        if (b.kind != 3) Host.key(1, b.code);
+        if (!b.menu()) Host.key(1, b.code);
         redraw();
     }
 

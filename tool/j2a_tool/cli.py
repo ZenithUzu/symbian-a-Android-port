@@ -167,7 +167,8 @@ def main(argv=None):
                    help="vsync: sincronizado; dynamic: la pantalla adapta sus Hz a los FPS del juego")
     s.add_argument("--keep-j2me-packages", action="store_true",
                    help="no renombrar javax.microedition.* al paquete propio del motor del port")
-    s.add_argument("--keypad", choices=["full", "minimal", "none"], default="full")
+    s.add_argument("--keypad", choices=["full", "minimal", "none"],
+                   help="por defecto se decide según el juego (los táctiles preguntan al jugador)")
     s.add_argument("--fps", type=int, default=0, help="límite de FPS (0 = sin límite)")
     s.add_argument("--platform", default="Nokia6300/07.21", help="valor de microedition.platform")
     s.add_argument("--force", action="store_true", help="sobrescribir la carpeta de salida")

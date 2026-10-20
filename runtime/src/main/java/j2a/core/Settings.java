@@ -51,6 +51,11 @@ final class Settings {
                 .apply();
     }
 
+    /** True once the player answered the "show keypad?" question (saved with the keypad choice). */
+    static boolean keypadAnswered(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains("keypad");
+    }
+
     /** Forget everything the player changed (port.properties values apply on next start). */
     static void reset(Context ctx) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();

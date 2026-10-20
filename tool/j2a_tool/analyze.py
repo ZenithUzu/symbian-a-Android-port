@@ -72,6 +72,7 @@ def analyze(jar, jad=None):
     used = defaultdict(set)          # platform class -> classes using it
     missing_members = defaultdict(set)
     resource_calls = 0
+    touch_classes = set()
     bundled_platform = []
     bad = []
     short_names = 0
@@ -88,6 +89,8 @@ def analyze(jar, jad=None):
             bad.append("%s (%s)" % (entry, e))
             continue
         versions["%d.%d" % (cf.major, cf.minor)] += 1
+        if any(e and e[0] == 1 and e[1] == "pointerPressed" for e in cf.cp):
+            touch_classes.add(name)
         for ref in cf.referenced_classes():
             top = ref.split("$")[0]
             if top.startswith(PLATFORM_PREFIXES) and top not in own:
@@ -129,8 +132,22 @@ def analyze(jar, jad=None):
         "screen_hints": suite.screen_hints(),
         "orientation_hint": suite.orientation_hint(),
         "uses_network": any(c.startswith("javax/microedition/io/") for c in used),
+        "touch": bool(touch_classes),
+        "keypad_hint": keypad_hint(suite.attrs, bool(touch_classes)),
     }
     return report
+
+
+def keypad_hint(attrs, touch):
+    """(keypad mode or None, ask the player on first launch?) from the manifest and the code."""
+    v = (attrs.get("Nokia-MIDlet-On-Screen-Keypad") or "").strip().lower()
+    if v == "no":
+        return "none", False  # the game draws its own touch controls
+    if v in ("gameactions", "navigationkeys"):
+        return "minimal", False
+    if (attrs.get("MIDlet-Touch-Support") or "").strip().lower() == "true" or touch:
+        return None, True  # touch-aware: may or may not need keys -> let the player choose
+    return None, False
 
 
 def inherited(rt, cls, meth):
@@ -202,6 +219,13 @@ def print_report(r):
         p("Pistas de resolución: " + "; ".join("%dx%d (%s)" % h for h in r["screen_hints"]))
     else:
         p("Sin pistas de resolución: se usará 240x320 (cámbialo con --screen)")
+    mode, ask = r["keypad_hint"]
+    if mode == "none":
+        p("Táctil: el juego trae sus propios controles en pantalla -> sin teclado virtual")
+    elif mode:
+        p("Táctil: el juego pide solo cruceta en pantalla -> teclado mínimo")
+    elif ask:
+        p("Táctil: el juego acepta toques -> el APK preguntará la primera vez si mostrar el teclado")
     if r["uses_network"]:
         p("Usa red (javax.microedition.io): se añadirá el permiso INTERNET")
     p("")

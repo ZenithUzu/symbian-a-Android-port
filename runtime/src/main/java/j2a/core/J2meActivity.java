@@ -85,6 +85,7 @@ public class J2meActivity extends Activity {
             return;
         }
         Host.startMIDlet(cls);
+        Host.askKeypadOnce();
     }
 
     /**

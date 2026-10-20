@@ -29,14 +29,15 @@ SHADERS = [("Píxeles nítidos", "nearest"), ("Nítido sin deformar (sharp)", "s
 FPS_MODES = [("Sincronizado (vsync)", "vsync"), ("Dinámico (la pantalla se adapta)", "dynamic"),
              ("Sin límite", "unlimited")]
 FPS_LIMITS = [("Sin límite", "0"), ("15", "15"), ("20", "20"), ("25", "25"), ("30", "30"), ("60", "60")]
-KEYPADS = [("Completo (cruceta + números)", "full"), ("Cruceta + OK", "minimal"), ("Sin teclado", "none")]
+KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruceta + números)", "full"),
+           ("Cruceta + OK", "minimal"), ("Sin teclado (el juego trae controles táctiles)", "none")]
 
 
 def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
     a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
-         "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--keypad", v["keypad"]]
-    for key, flag in (("screen", "--screen"), ("orientation", "--orientation"), ("name", "--name"),
+         "--fps-mode", v["fps_mode"], "--fps", v["fps"]]
+    for key, flag in (("keypad", "--keypad"), ("screen", "--screen"), ("orientation", "--orientation"), ("name", "--name"),
                       ("package", "--package"), ("shaders", "--shaders")):
         if v.get(key):
             a += [flag, v[key]]

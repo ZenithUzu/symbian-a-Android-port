@@ -22,6 +22,8 @@ public final class Config {
     public String fpsMode = "vsync";
     /** full | minimal | none */
     public String keypad = "full";
+    /** Ask the player once whether to show the keypad (touch games with their own controls). */
+    public boolean keypadAsk = false;
     /** 0..255 */
     public int keypadAlpha = 150;
     public boolean haptics = true;
@@ -55,6 +57,7 @@ public final class Config {
         c.autoFit = b(p, "auto.fit", c.autoFit);
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
+        c.keypadAsk = b(p, "keypad.ask", c.keypadAsk);
         c.haptics = b(p, "keypad.haptics", c.haptics);
         c.showFps = b(p, "show.fps", c.showFps);
         c.fpsLimit = i(p, "fps.limit", c.fpsLimit);

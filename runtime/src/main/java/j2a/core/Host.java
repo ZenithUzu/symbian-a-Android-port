@@ -79,6 +79,8 @@ public final class Host {
         System.setProperty("supports.mixing", "true");
         System.setProperty("microedition.commports", "");
         System.setProperty("microedition.hostname", "localhost");
+        System.setProperty("com.nokia.mid.ui.multipointtouch.version", "1.0");
+        System.setProperty("com.nokia.pointer.number", "0");
         events.start();
     }
 
@@ -333,11 +335,18 @@ public final class Host {
         return true;
     }
 
-    static void pointer(final int type, final int x, final int y) {
+    /** type: 0 pressed, 1 dragged, 2 released; id = finger (0 = first). */
+    static void pointer(final int type, final int id, final int x, final int y) {
         final Displayable d = current;
         if (!(d instanceof Canvas)) return;
         final Canvas c = (Canvas) d;
-        events.post(new Runnable() { public void run() { c.j2aPointer(type, x, y); } });
+        events.post(new Runnable() {
+            public void run() {
+                // Nokia multipoint touch: the game asks which finger caused the event
+                System.setProperty("com.nokia.pointer.number", String.valueOf(id));
+                c.j2aPointer(type, x, y);
+            }
+        });
     }
 
     static String softLabel(boolean left) {
@@ -402,7 +411,7 @@ public final class Host {
                         "Modo de FPS: " + cfg.fpsMode,
                         "Límite de FPS: " + (cfg.fpsLimit == 0 ? "sin límite" : String.valueOf(cfg.fpsLimit)),
                         "Mostrar FPS: " + (cfg.showFps ? "sí" : "no"),
-                        "Teclado virtual: " + cfg.keypad,
+                        "Teclado virtual: " + ("none".equals(cfg.keypad) ? "oculto (solo táctil)" : "minimal".equals(cfg.keypad) ? "cruceta + OK" : "completo"),
                         "Opacidad del teclado: " + (cfg.keypadAlpha * 100 / 255) + "%",
                         "Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"),
                         "Sonido: " + (cfg.sound ? "sí" : "no"),
@@ -482,6 +491,33 @@ public final class Host {
                                 settingsChanged();
                             }
                         })
+                        .show();
+            }
+        });
+    }
+
+    /** Touch games: ask once whether the on-screen keypad is wanted (the menu can change it later). */
+    static void askKeypadOnce() {
+        if (!cfg.keypadAsk || Settings.keypadAnswered(activity)) return;
+        runOnUi(new Runnable() {
+            public void run() {
+                new AlertDialog.Builder(activity)
+                        .setTitle("Controles")
+                        .setMessage("Este juego se puede jugar tocando la pantalla. ¿Quieres además el teclado "
+                                + "virtual del teléfono? (Puedes cambiarlo luego en el menú ☰.)")
+                        .setPositiveButton("Sí, mostrar teclado", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int w) {
+                                if ("none".equals(cfg.keypad)) cfg.keypad = "full";
+                                settingsChanged();
+                            }
+                        })
+                        .setNegativeButton("No, solo táctil", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int w) {
+                                cfg.keypad = "none";
+                                settingsChanged();
+                            }
+                        })
+                        .setCancelable(false)
                         .show();
             }
         });

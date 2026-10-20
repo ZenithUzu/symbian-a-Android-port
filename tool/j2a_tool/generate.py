@@ -340,6 +340,9 @@ def port(args):
         f.write("\n".join(names) + "\n")
     write_props(os.path.join(assets, "app.properties"), sorted(suite.attrs.items()),
                 "Atributos del MANIFEST.MF/JAD (MIDlet.getAppProperty los lee de aquí)")
+    hint_mode, hint_ask = report["keypad_hint"]
+    args.keypad_ask = not args.keypad and hint_ask
+    args.keypad = args.keypad or hint_mode or "full"
     write_props(os.path.join(assets, "port.properties"), _port_items(midlet_class, sw, sh, args),
                 "Configuración del port (editable). El jugador puede cambiar algunas opciones\n"
                 "desde el menú del port (botón ☰ del teclado virtual).")
@@ -379,6 +382,8 @@ def _port_items(midlet_class, sw, sh, args):
         ("fps.mode", args.fps_mode),
         ("# full = cruceta + teclado numérico | minimal = cruceta + OK | none", None),
         ("keypad", args.keypad),
+        ("# true = la primera vez el APK pregunta si mostrar el teclado (juegos con controles táctiles)", None),
+        ("keypad.ask", "true" if args.keypad_ask else "false"),
         ("keypad.alpha", 150),
         ("keypad.haptics", "true"),
         ("# 0 = sin límite. Juegos antiguos suelen ir demasiado rápido: prueba 30", None),
