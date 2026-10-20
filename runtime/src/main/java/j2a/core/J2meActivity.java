@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
@@ -50,15 +51,18 @@ public class J2meActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
-        ScreenView view = new ScreenView(this);
+        GlScreen gl = new GlScreen(this);
+        ScreenView view = new ScreenView(this, gl);
         FrameLayout screens = new FrameLayout(this);
         screens.setVisibility(View.GONE);
+        root.addView(gl, new FrameLayout.LayoutParams(-1, -1));
         root.addView(view, new FrameLayout.LayoutParams(-1, -1));
         root.addView(screens, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         view.requestFocus();
 
-        Host.init(this, cfg, app, view, screens);
+        setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC); // volume keys = game volume
+        Host.init(this, cfg, app, gl, view, screens);
         if (launched) {
             // The activity was recreated while the process survived: the
             // MIDlet keeps running, we only re-attached the views.
@@ -168,6 +172,13 @@ public class J2meActivity extends Activity {
         if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
             return super.dispatchKeyEvent(e);
+        }
+        // Playing with a gamepad or keyboard: hide the touch keypad until the screen is touched.
+        int src = e.getSource();
+        if ((src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                || (src & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
+                || (e.getDevice() != null && e.getDevice().getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC)) {
+            if (Host.view != null) Host.view.setControllerActive(true);
         }
         int j2me = Keys.fromAndroid(code);
         if (j2me == 0) {

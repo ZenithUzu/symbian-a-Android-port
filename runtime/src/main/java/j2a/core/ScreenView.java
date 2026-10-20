@@ -2,28 +2,23 @@ package j2a.core;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.os.Build;
-import android.os.Looper;
-import android.os.SystemClock;
 import android.util.SparseArray;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.view.View;
 
 import java.util.ArrayList;
 
 /**
- * Shows the J2ME screen scaled to the device and draws the on-screen keypad
- * (soft keys, d-pad and numeric keypad) on top of the same surface.
+ * Transparent overlay above {@link GlScreen}: computes where the game image goes, draws the
+ * on-screen keypad (soft keys, d-pad, numeric keypad) and the FPS counter, and handles touch.
  */
-public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
+public class ScreenView extends View {
 
     static final class Button {
         final RectF r = new RectF();
@@ -41,29 +36,24 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private final Object presentLock = new Object();
-    private Bitmap lastFrame;
-    private boolean ready;
+    private final GlScreen gl;
     private int vw, vh;
     private final Rect dst = new Rect();
     private final ArrayList<Button> buttons = new ArrayList<Button>();
     private final SparseArray<Button> touches = new SparseArray<Button>();
     private int screenPointer = -1;
     private final float density;
+    /** Keypad hidden because a gamepad/keyboard is being used; any touch brings it back. */
+    private volatile boolean controllerActive;
 
-    private final Paint framePaint = new Paint();
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private long nextFrameNs;
-    private int frames;
-    private long fpsWindow;
-    private int fps;
-
-    public ScreenView(Context ctx) {
+    public ScreenView(Context ctx, GlScreen gl) {
         super(ctx);
+        this.gl = gl;
         density = ctx.getResources().getDisplayMetrics().density;
-        getHolder().addCallback(this);
         setFocusable(true);
         setFocusableInTouchMode(true);
         setKeepScreenOn(true);
@@ -73,108 +63,36 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
         text.setColor(Color.WHITE);
     }
 
-    // ---------------------------------------------------------------- surface
-
-    public void surfaceCreated(SurfaceHolder h) {}
-
-    public void surfaceChanged(SurfaceHolder h, int format, int w, int hh) {
-        synchronized (presentLock) {
-            vw = w;
-            vh = hh;
-            ready = true;
-        }
+    @Override
+    protected void onSizeChanged(int w, int h, int ow, int oh) {
+        vw = w;
+        vh = h;
         relayout();
     }
 
-    public void surfaceDestroyed(SurfaceHolder h) {
-        synchronized (presentLock) { ready = false; }
-    }
-
-    // ---------------------------------------------------------------- drawing
-
-    /** Draws a frame. Callable from any thread. */
-    public void present(Bitmap frame) {
-        // Only real frames from game threads are paced; keypad redraws never wait.
-        if (frame != null && Host.cfg.fpsLimit > 0 && Looper.myLooper() != Looper.getMainLooper()) pace(Host.cfg.fpsLimit);
-        synchronized (presentLock) {
-            if (frame != null) {
-                lastFrame = frame;
-                countFrame();
-            }
-            if (!ready) return;
-            Canvas canvas = lock();
-            if (canvas == null) return;
-            try {
-                drawAll(canvas);
-            } finally {
-                getHolder().unlockCanvasAndPost(canvas);
-            }
-        }
-    }
-
-    /**
-     * Fixed-cadence frame limiter: sleeps until the next slot measured in nanoseconds, so a
-     * 30 FPS limit gives 30 FPS (sleeping "1000/30 ms after the last frame" drifts to ~27).
-     */
-    private void pace(int fps) {
-        long period = 1000000000L / fps;
-        long now = System.nanoTime();
-        long wait = nextFrameNs - now;
-        if (wait > 0) {
-            try { Thread.sleep(wait / 1000000L, (int) (wait % 1000000L)); } catch (InterruptedException ignored) {}
-        }
-        // keep the cadence, but don't try to "catch up" after a long hiccup
-        nextFrameNs = (wait > -period ? nextFrameNs : now) + period;
-    }
-
-    /** Re-draws the last frame (e.g. when a keypad button changes state). */
+    /** Re-draws keypad / FPS (any thread). */
     public void redraw() {
-        present(null);
+        postInvalidate();
     }
 
-    private static java.lang.reflect.Method lockHw;
-    private static boolean lockHwResolved;
-
-    /** GPU canvas on Android 8+ (scaling is much cheaper), software canvas otherwise. */
-    private Canvas lock() {
-        SurfaceHolder h = getHolder();
-        if (Build.VERSION.SDK_INT >= 26) {
-            try {
-                if (!lockHwResolved) {
-                    lockHwResolved = true;
-                    lockHw = SurfaceHolder.class.getMethod("lockHardwareCanvas");
-                }
-                if (lockHw != null) return (Canvas) lockHw.invoke(h);
-            } catch (Throwable ignored) {
-                lockHw = null;
-            }
-        }
-        return h.lockCanvas();
+    void setControllerActive(boolean active) {
+        if (controllerActive == active) return;
+        controllerActive = active;
+        post(new Runnable() { public void run() { relayout(); } });
     }
 
-    private void countFrame() {
-        frames++;
-        long now = SystemClock.uptimeMillis();
-        if (now - fpsWindow >= 1000) {
-            fps = frames;
-            frames = 0;
-            fpsWindow = now;
-        }
+    private String keypadMode() {
+        return controllerActive ? "none" : Host.cfg.keypad;
     }
 
-    private void drawAll(Canvas c) {
-        c.drawColor(Color.BLACK);
-        Bitmap f = lastFrame;
-        if (f != null && !f.isRecycled()) {
-            framePaint.setFilterBitmap(Host.cfg.filter);
-            c.drawBitmap(f, null, dst, framePaint);
-        }
+    @Override
+    protected void onDraw(Canvas c) {
         drawKeypad(c);
         if (Host.cfg.showFps) {
             text.setTextAlign(Paint.Align.LEFT);
             text.setTextSize(14 * density);
             text.setColor(Color.YELLOW);
-            c.drawText(fps + " fps", 6 * density, 18 * density, text);
+            c.drawText(gl.fps + " fps", 6 * density, 18 * density, text);
             text.setColor(Color.WHITE);
             text.setTextAlign(Paint.Align.CENTER);
         }
@@ -216,8 +134,8 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
             int w = vw, h = vh;
             if (w <= 0 || h <= 0) return;
             Config c = Host.cfg;
-            boolean keypad = !"none".equals(c.keypad);
-            boolean full = "full".equals(c.keypad);
+            boolean keypad = !"none".equals(keypadMode());
+            boolean full = "full".equals(keypadMode());
             float pad = 6 * density;
             if (!keypad) {
                 fit(0, 0, w, h);
@@ -244,7 +162,8 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
                 if (full) addGrid(right); else addOk(right);
             }
         }
-        redraw();
+        gl.setDestination(dst);
+        invalidate();
     }
 
     private void fit(int ax, int ay, int aw, int ah) {
@@ -263,7 +182,7 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
             h = Math.round(sh * s);
         }
         int x = ax + (aw - w) / 2;
-        int y = vh >= vw && !"none".equals(c.keypad) ? ay : ay + (ah - h) / 2;
+        int y = vh >= vw && !"none".equals(keypadMode()) ? ay : ay + (ah - h) / 2;
         dst.set(x, y, x + w, y + h);
     }
 
@@ -320,6 +239,10 @@ public class ScreenView extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
+        if (controllerActive && action == MotionEvent.ACTION_DOWN) {
+            setControllerActive(false);
+            return true;
+        }
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN: {

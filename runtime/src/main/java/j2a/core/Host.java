@@ -40,6 +40,7 @@ public final class Host {
     public static Properties appProperties = new Properties();
     static Activity activity;
     static ScreenView view;
+    static GlScreen gl;
     static FrameLayout screenContainer;
     static final Handler ui = new Handler(Looper.getMainLooper());
     public static final EventQueue events = new EventQueue();
@@ -56,13 +57,15 @@ public final class Host {
 
     // ------------------------------------------------------------------ setup
 
-    static void init(Activity a, Config c, Properties props, ScreenView v, FrameLayout container) {
+    static void init(Activity a, Config c, Properties props, GlScreen g, ScreenView v, FrameLayout container) {
         activity = a;
         cfg = c;
         appProperties = props;
+        gl = g;
         view = v;
         screenContainer = container;
         if (screenImage != null) return; // activity re-created, process alive
+        installCrashPolicy();
         screenImage = Image.createImage(cfg.screenWidth, cfg.screenHeight);
         screenGraphics = screenImage.getGraphics();
         System.setProperty("microedition.platform", cfg.platform);
@@ -75,6 +78,24 @@ public final class Host {
         System.setProperty("microedition.commports", "");
         System.setProperty("microedition.hostname", "localhost");
         events.start();
+    }
+
+    /**
+     * On a phone an uncaught exception only ends the thread that threw it; on Android it kills
+     * the whole app. Games often let worker threads (loaders, sound, timers) die on purpose, so
+     * only exceptions on the Android main thread keep the default (crash) behaviour.
+     */
+    private static void installCrashPolicy() {
+        final Thread.UncaughtExceptionHandler android = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            public void uncaughtException(Thread t, Throwable e) {
+                if (t == Looper.getMainLooper().getThread() && android != null) {
+                    android.uncaughtException(t, e);
+                } else {
+                    Log.e(TAG, "Thread '" + t.getName() + "' ended with an exception (ignored, as on a phone)", e);
+                }
+            }
+        });
     }
 
     static void startMIDlet(final String className) {
@@ -112,6 +133,7 @@ public final class Host {
 
     static void onPause() {
         paused = true;
+        if (gl != null) gl.onPause();
         final Displayable d = current;
         if (d != null) {
             events.post(new Runnable() { public void run() { d.j2aHideNotify(); } });
@@ -127,6 +149,7 @@ public final class Host {
     }
 
     static void onResume() {
+        if (gl != null) gl.onResume();
         if (!paused) return;
         paused = false;
         if (started) {
@@ -252,8 +275,21 @@ public final class Host {
 
     /** Shows a finished frame (screen bitmap or GameCanvas buffer). */
     public static void present(Bitmap frame) {
+        GlScreen g = gl;
+        if (g == null || frame == null) return;
+        if (paused) {
+            // in background: don't let a game loop that relies on vsync spin at 100% CPU
+            if (Looper.myLooper() != Looper.getMainLooper()) {
+                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+            }
+            return;
+        }
+        g.present(frame);
+    }
+
+    static void redrawOverlay() {
         ScreenView v = view;
-        if (v != null && !paused) v.present(frame);
+        if (v != null) v.redraw();
     }
 
     // --------------------------------------------------------------- input
@@ -348,15 +384,23 @@ public final class Host {
     static void showPortMenu() {
         runOnUi(new Runnable() {
             public void run() {
+                final java.util.List<Shaders.Def> shaders = Shaders.all(activity);
+                String shaderName = cfg.shader;
+                for (Shaders.Def d : shaders) if (d.id.equals(cfg.shader)) shaderName = d.label;
                 final String[] items = {
                         "Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight,
                         "Rotación: " + (cfg.orientation.length() == 0 ? "la del juego" : cfg.orientation),
                         "Escalado: " + cfg.scaleMode,
-                        "Filtro suave: " + (cfg.filter ? "sí" : "no"),
+                        "Shader: " + shaderName,
+                        "Modo de FPS: " + cfg.fpsMode,
                         "Límite de FPS: " + (cfg.fpsLimit == 0 ? "sin límite" : String.valueOf(cfg.fpsLimit)),
                         "Mostrar FPS: " + (cfg.showFps ? "sí" : "no"),
                         "Teclado virtual: " + cfg.keypad,
+                        "Opacidad del teclado: " + (cfg.keypadAlpha * 100 / 255) + "%",
+                        "Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"),
                         "Sonido: " + (cfg.sound ? "sí" : "no"),
+                        "Captura de pantalla",
+                        "Restablecer opciones",
                         "Salir del juego"
                 };
                 new AlertDialog.Builder(activity)
@@ -376,23 +420,52 @@ public final class Host {
                                         pick("Escalado", new String[]{"Proporcional", "Entero (pixel perfect)", "Estirar (pantalla completa)"},
                                                 new String[]{"fit", "integer", "stretch"}, cfg.scaleMode, null, "scale");
                                         return;
-                                    case 3: cfg.filter = !cfg.filter; break;
+                                    case 3: {
+                                        String[] labels = new String[shaders.size()], ids = new String[shaders.size()];
+                                        for (int i = 0; i < ids.length; i++) {
+                                            labels[i] = shaders.get(i).label;
+                                            ids[i] = shaders.get(i).id;
+                                        }
+                                        pick("Shader", labels, ids, cfg.shader, null, "shader");
+                                        return;
+                                    }
                                     case 4:
-                                        pick("Límite de FPS", new String[]{"Sin límite", "15", "20", "25", "30", "50", "60"},
-                                                new String[]{"0", "15", "20", "25", "30", "50", "60"},
+                                        pick("Modo de FPS", new String[]{"Sincronizado con la pantalla (vsync)",
+                                                        "Dinámico (la pantalla se adapta a los FPS del juego)", "Sin límite"},
+                                                new String[]{"vsync", "dynamic", "unlimited"}, cfg.fpsMode, null, "fpsMode");
+                                        return;
+                                    case 5:
+                                        pick("Límite de FPS", new String[]{"Sin límite", "15", "20", "25", "30", "50", "60", "90", "120"},
+                                                new String[]{"0", "15", "20", "25", "30", "50", "60", "90", "120"},
                                                 String.valueOf(cfg.fpsLimit), null, "fps");
                                         return;
-                                    case 5: cfg.showFps = !cfg.showFps; break;
-                                    case 6:
+                                    case 6: cfg.showFps = !cfg.showFps; break;
+                                    case 7:
                                         pick("Teclado virtual", new String[]{"Completo", "Cruceta + OK", "Oculto"},
                                                 new String[]{"full", "minimal", "none"}, cfg.keypad, null, "keypad");
                                         return;
-                                    case 7:
+                                    case 8:
+                                        pick("Opacidad del teclado", new String[]{"25%", "50%", "75%", "100%"},
+                                                new String[]{"64", "128", "192", "255"}, String.valueOf(cfg.keypadAlpha), null, "alpha");
+                                        return;
+                                    case 9: cfg.haptics = !cfg.haptics; break;
+                                    case 10:
                                         cfg.sound = !cfg.sound;
                                         if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
                                         else javax.microedition.media.Manager.j2aPauseAll();
                                         break;
-                                    case 8: requestExit(); return;
+                                    case 11: Screenshot.save(activity, gl.snapshot()); return;
+                                    case 12:
+                                        Settings.reset(activity);
+                                        new AlertDialog.Builder(activity)
+                                                .setMessage("Opciones restablecidas. Se aplican al volver a abrir el juego.")
+                                                .setPositiveButton("Salir ahora", new DialogInterface.OnClickListener() {
+                                                    public void onClick(DialogInterface d, int x) { requestExit(); }
+                                                })
+                                                .setNegativeButton("Más tarde", null)
+                                                .show();
+                                        return;
+                                    case 13: requestExit(); return;
                                 }
                                 settingsChanged();
                             }
@@ -421,6 +494,9 @@ public final class Host {
                         else if (field.equals("scale")) cfg.scaleMode = v;
                         else if (field.equals("fps")) cfg.fpsLimit = Integer.parseInt(v);
                         else if (field.equals("keypad")) cfg.keypad = v;
+                        else if (field.equals("shader")) { cfg.shader = v; gl.requestRender(); }
+                        else if (field.equals("fpsMode")) cfg.fpsMode = v;
+                        else if (field.equals("alpha")) cfg.keypadAlpha = Integer.parseInt(v);
                         if (after != null) after.run();
                         settingsChanged();
                     }

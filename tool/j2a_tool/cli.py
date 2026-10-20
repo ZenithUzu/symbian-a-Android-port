@@ -71,7 +71,7 @@ def cmd_verify(a):
     if not aj or not javac:
         sys.exit("Necesito javac y un android.jar (instala una plataforma en el SDK o usa --android-jar)")
     srcs = []
-    for sub in ("j2me-runtime/src/main/java", "app/src/main/java"):
+    for sub in ("engine/src/main/java", "app/src/main/java"):
         for d, _, fs in os.walk(os.path.join(a.project, sub)):
             srcs += [os.path.join(d, f) for f in fs if f.endswith(".java")]
     cp = [p for p in [os.path.join(a.project, "app", "libs", "game.jar")] if os.path.isfile(p)]
@@ -159,7 +159,14 @@ def main(argv=None):
     s.add_argument("--screen", help="resolución virtual, p. ej. 240x320, 176x208, 360x640")
     s.add_argument("--orientation", choices=["portrait", "landscape", "auto"])
     s.add_argument("--scale", choices=["fit", "integer", "stretch"], default="fit")
-    s.add_argument("--filter", action="store_true", help="suavizado bilineal al escalar")
+    s.add_argument("--filter", action="store_true", help="atajo de --shader smooth")
+    s.add_argument("--shader", help="shader por defecto: nearest, smooth, sharp, scanlines, lcd, crt, mono "
+                                    "o file:<sección .ini de --shaders>")
+    s.add_argument("--shaders", help="carpeta con shaders formato PPSSPP (.ini/.fsh/.vsh) para incluir en el APK")
+    s.add_argument("--fps-mode", choices=["vsync", "dynamic", "unlimited"], default="vsync",
+                   help="vsync: sincronizado; dynamic: la pantalla adapta sus Hz a los FPS del juego")
+    s.add_argument("--keep-j2me-packages", action="store_true",
+                   help="no renombrar javax.microedition.* al paquete propio del motor del port")
     s.add_argument("--keypad", choices=["full", "minimal", "none"], default="full")
     s.add_argument("--fps", type=int, default=0, help="límite de FPS (0 = sin límite)")
     s.add_argument("--platform", default="Nokia6300/07.21", help="valor de microedition.platform")

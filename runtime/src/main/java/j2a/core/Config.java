@@ -12,8 +12,12 @@ public final class Config {
     public int screenHeight = 320;
     /** fit | integer | stretch */
     public String scaleMode = "fit";
-    /** Bilinear filtering when scaling the screen up. */
+    /** Kept for old port.properties: scale.filter=true means shader=smooth. */
     public boolean filter = false;
+    /** Post-processing shader id (see Shaders) or "file:<section>" from assets/shaders/*.ini. */
+    public String shader = "nearest";
+    /** vsync | dynamic | unlimited (see GlScreen). */
+    public String fpsMode = "vsync";
     /** full | minimal | none */
     public String keypad = "full";
     /** 0..255 */
@@ -44,6 +48,8 @@ public final class Config {
         c.screenHeight = i(p, "screen.height", c.screenHeight);
         c.scaleMode = s(p, "scale.mode", c.scaleMode);
         c.filter = b(p, "scale.filter", c.filter);
+        c.shader = s(p, "shader", c.filter ? "smooth" : "nearest");
+        c.fpsMode = s(p, "fps.mode", c.fpsMode);
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
         c.haptics = b(p, "keypad.haptics", c.haptics);

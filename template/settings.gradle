@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "@@PROJECT_NAME@@"
 include ':app'
-include ':j2me-runtime'
+include ':engine'

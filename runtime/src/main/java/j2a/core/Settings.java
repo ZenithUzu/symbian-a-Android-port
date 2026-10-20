@@ -13,7 +13,10 @@ final class Settings {
         SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         c.keypad = p.getString("keypad", c.keypad);
         c.scaleMode = p.getString("scale.mode", c.scaleMode);
-        c.filter = p.getBoolean("scale.filter", c.filter);
+        c.shader = p.getString("shader", c.shader);
+        c.fpsMode = p.getString("fps.mode", c.fpsMode);
+        c.keypadAlpha = p.getInt("keypad.alpha", c.keypadAlpha);
+        c.haptics = p.getBoolean("keypad.haptics", c.haptics);
         c.showFps = p.getBoolean("show.fps", c.showFps);
         c.fpsLimit = p.getInt("fps.limit", c.fpsLimit);
         c.sound = p.getBoolean("sound", c.sound);
@@ -26,12 +29,20 @@ final class Settings {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString("keypad", c.keypad)
                 .putString("scale.mode", c.scaleMode)
-                .putBoolean("scale.filter", c.filter)
+                .putString("shader", c.shader)
+                .putString("fps.mode", c.fpsMode)
+                .putInt("keypad.alpha", c.keypadAlpha)
+                .putBoolean("keypad.haptics", c.haptics)
                 .putBoolean("show.fps", c.showFps)
                 .putInt("fps.limit", c.fpsLimit)
                 .putBoolean("sound", c.sound)
                 .putString("orientation", c.orientation)
                 .apply();
+    }
+
+    /** Forget everything the player changed (port.properties values apply on next start). */
+    static void reset(Context ctx) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();
     }
 
     /** Only written when the player picks a resolution, so port.properties stays the default. */

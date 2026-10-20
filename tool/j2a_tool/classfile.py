@@ -207,3 +207,40 @@ def _walk(data, start, length):
             pc += 6 if data[start + pc + 1] == 0x84 else 4
         else:
             pc += _LEN[op]
+
+
+def remap_utf8(data, pattern, repl):
+    """Rewrites CONSTANT_Utf8 entries with re.sub(pattern, repl) (class names, descriptors and
+    string literals). Indices don't change, so the rest of the class file is copied as is."""
+    cf = ClassFile(data)
+    out = bytearray(data[:10])
+    pos = 10
+    i = 1
+    changed = False
+    count = len(cf.cp)
+    while i < count:
+        tag = data[pos]
+        if tag == 1:
+            ln = struct.unpack(">H", data[pos + 1:pos + 3])[0]
+            raw = data[pos + 3:pos + 3 + ln]
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:  # modified UTF-8 oddities: never touch them
+                text = None
+            new = pattern.sub(repl, text) if text is not None else None
+            if new is not None and new != text:
+                b = new.encode("utf-8")
+                out += b"\x01" + struct.pack(">H", len(b)) + b
+                changed = True
+            else:
+                out += data[pos:pos + 3 + ln]
+            pos += 3 + ln
+        else:
+            size = 1 + CONSTANT_SIZES[tag]
+            out += data[pos:pos + size]
+            pos += size
+            if tag in (5, 6):
+                i += 1
+        i += 1
+    out += data[pos:]
+    return bytes(out) if changed else data

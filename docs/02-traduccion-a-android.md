@@ -19,10 +19,10 @@ Por eso j2a **no reescribe el juego a Kotlin ni a otro lenguaje**. Hace dos cosa
 1. **El bytecode se reutiliza tal cual.** El compilador D8 de Android (el que usa Gradle) convierte
    `.class` de Java 1.1 a DEX sin problemas, incluso con `jsr/ret`. El código descompilado también
    es Java normal que Android Studio compila.
-2. **Se implementa la plataforma J2ME encima de Android.** El módulo `j2me-runtime` contiene
-   clases con **los mismos nombres de paquete** (`javax.microedition.lcdui.Canvas`, `Graphics`,
-   `Sprite`, `RecordStore`, `Player`...) pero programadas con APIs de Android. El juego cree que
-   está en un Nokia; en realidad cada llamada termina en Android.
+2. **El motor del port reemplaza a la plataforma del teléfono.** El módulo `engine` implementa
+   `Canvas`, `Graphics`, `Sprite`, `RecordStore`, `Player`... con APIs de Android, y j2a renombra
+   esas clases al paquete del juego (`com.tu.juego.engine.lcdui.Canvas`) en el código y en el
+   bytecode. No queda nada de `javax.microedition` en el APK: cada llamada va directo a Android.
 
 Es el mismo principio que usan J2ME Loader o los ports oficiales "J2ME Android Bridge" de Nokia,
 pero aquí el resultado es **un proyecto de Android Studio con código editable**, no un emulador.
@@ -32,8 +32,8 @@ pero aquí el resultado es **un proyecto de Android Studio con código editable*
 │  Juego (código descompilado editable  +  libs/game.jar)        │
 │        │  llama a javax.microedition.* / com.nokia.mid.*       │
 │        ▼                                                       │
-│  j2me-runtime  (implementación de J2ME con APIs de Android)    │
-│        │  Canvas → SurfaceView, Graphics → android.graphics    │
+│  engine  (motor del port, paquete <tu.paquete>.engine)         │
+│        │  pantalla → OpenGL ES + shaders, Graphics → Canvas    │
 │        ▼                                                       │
 │  Android (ART, GPU, MediaPlayer, almacenamiento, táctil)       │
 └────────────────────────────────────────────────────────────────┘
@@ -41,10 +41,10 @@ pero aquí el resultado es **un proyecto de Android Studio con código editable*
 
 ## Tabla de traducción de APIs
 
-| J2ME | Implementación Android en `j2me-runtime` |
+| J2ME | Implementación Android en el módulo `engine` |
 |---|---|
 | `MIDlet` (`startApp/pauseApp/destroyApp`) | `J2meActivity`: `onCreate` → constructor + `startApp`, `onPause` → `pauseApp`, `onResume` → `startApp`, `notifyDestroyed` → `finish()` |
-| `Display.setCurrent(Canvas)` | Muestra la `ScreenView` (SurfaceView) |
+| `Display.setCurrent(Canvas)` | `GlScreen` (GLSurfaceView con shader) + capa del teclado táctil |
 | `Display.setCurrent(Form/List/TextBox/Alert)` | Vistas nativas Android (`EditText`, `RadioButton`, `SeekBar`...) — mucho más cómodas en táctil |
 | `Canvas.paint(Graphics)` / `repaint()` / `serviceRepaints()` | Hilo de eventos J2ME único (`EventQueue`), dibuja en un `Bitmap` del tamaño virtual y lo escala a la pantalla |
 | `GameCanvas.getGraphics()` / `flushGraphics()` / `getKeyStates()` | Búfer propio + presentación inmediata; estados de teclas *latched* como en MIDP |
@@ -77,7 +77,7 @@ protected void paint(Graphics g) {
 No cambia nada en el juego. Lo que se ejecuta en Android es la implementación del runtime:
 
 ```java
-// j2me-runtime: javax/microedition/lcdui/Graphics.java
+// engine: <tu.paquete>/engine/lcdui/Graphics.java
 Matrix m = new Matrix();
 m.postScale(-1, 1); m.postTranslate(w, 0);       // TRANS_MIRROR
 canvas.save(); canvas.translate(x, y); canvas.concat(m);

@@ -54,7 +54,51 @@ def require_java(tool="java"):
 
 # ---------------------------------------------------------------- patching
 
-def patch_jar(src_jar, out_jar, exclude=()):
+# J2ME API packages the engine provides -> sub-packages of the app's own engine package.
+NATIVE_PACKAGES = [
+    ("javax/microedition/lcdui/", "lcdui/"), ("javax/microedition/midlet/", "midlet/"),
+    ("javax/microedition/rms/", "rms/"), ("javax/microedition/media/", "media/"),
+    ("javax/microedition/io/", "io/"), ("com/nokia/mid/", "nokia/"), ("com/samsung/util/", "samsung/"),
+    ("j2a/core/", "core/"),
+]
+
+
+def native_remapper(engine_pkg):
+    """(regex, repl) renaming the J2ME API to <engine_pkg>.* in slash and dot form.
+
+    Matches whole package names ('package javax.microedition.lcdui;', 'javax/microedition/lcdui/X',
+    'javax.microedition.lcdui.game.Sprite'). javax.microedition.io.file, khronos, m3g... are
+    not implemented by the engine and are left alone."""
+    import re as _re
+    base = engine_pkg.replace(".", "/") + "/"
+    table = {}
+    for old, new in NATIVE_PACKAGES:
+        old, new = old.rstrip("/"), (base + new).rstrip("/")
+        table[old] = new
+        table[old.replace("/", ".")] = new.replace("/", ".")
+    keys = sorted(table, key=len, reverse=True)
+    # start: not inside an identifier, or right after the 'L' of a descriptor ("(ILjavax/...;)V")
+    start = "(?:(?<![\\w$])|(?<=L))"
+    pattern = _re.compile(start + "(?:%s)(?![\\w$])(?![./]file\\b)" % "|".join(_re.escape(k) for k in keys))
+    return pattern, lambda m: table[m.group(0)]
+
+
+# self-check of the remapper (cheap, runs on import)
+_p, _r = native_remapper("a.b.engine")
+assert _p.sub(_r, "package javax.microedition.lcdui;") == "package a.b.engine.lcdui;"
+assert _p.sub(_r, "Ljavax/microedition/lcdui/game/Sprite;") == "La/b/engine/lcdui/game/Sprite;"
+assert _p.sub(_r, "javax.microedition.io.file.FileConnection") == "javax.microedition.io.file.FileConnection"
+assert _p.sub(_r, "javax.microedition.khronos.egl.EGL10") == "javax.microedition.khronos.egl.EGL10"
+assert _p.sub(_r, "import j2a.core.Host;") == "import a.b.engine.core.Host;"
+assert _p.sub(_r, "(Ljavax/microedition/lcdui/Graphics;II)V") == "(La/b/engine/lcdui/Graphics;II)V"
+assert _p.sub(_r, "[Lcom/nokia/mid/ui/DirectGraphics;") == "[La/b/engine/nokia/ui/DirectGraphics;"
+assert _p.sub(_r, "com.nokia.mid.ui.FullCanvas") == "a.b.engine.nokia.ui.FullCanvas"
+assert _p.sub(_r, "xjavax.microedition.lcdui") == "xjavax.microedition.lcdui"
+assert _p.sub(_r, "(ILjavax/microedition/lcdui/Image;Z)V") == "(ILa/b/engine/lcdui/Image;Z)V"
+del _p, _r
+
+
+def patch_jar(src_jar, out_jar, exclude=(), remap=None):
     """Writes a classes-only JAR with resource calls patched.
 
     exclude: set of internal class names (without .class) to leave out.
@@ -84,6 +128,8 @@ def patch_jar(src_jar, out_jar, exclude=()):
             if patched:
                 data = patched
                 stats["patched"].append(internal)
+            if remap:
+                data = classfile.remap_utf8(data, remap[0], remap[1])
             zout.writestr(name, data)
             stats["classes"] += 1
     return stats

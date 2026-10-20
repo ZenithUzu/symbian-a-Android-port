@@ -105,6 +105,53 @@ def pick_screen(args, report):
     return 240, 320, "valor por defecto"
 
 
+def copy_engine(dst, engine_pkg, remap):
+    """Copies runtime/ as the 'engine' module, moving sources to the renamed packages."""
+    src_root = paths.runtime_dir()
+    for d, dirs, files in os.walk(src_root):
+        dirs[:] = [x for x in dirs if x not in ("build", ".gradle")]
+        for f in files:
+            rel = os.path.relpath(os.path.join(d, f), src_root).replace(os.sep, "/")
+            with io.open(os.path.join(d, f), encoding="utf-8") as fh:
+                text = fh.read()
+            if remap:
+                rel = remap[0].sub(remap[1], rel)
+                text = remap[0].sub(remap[1], text)
+            if f == "build.gradle":
+                text = text.replace("namespace = 'j2a.runtime'",
+                                    "namespace = '%s'" % (engine_pkg if remap else "j2a.runtime"))
+            target = os.path.join(dst, rel.replace("/", os.sep))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with io.open(target, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(text)
+
+
+def rename_sources(root, remap):
+    if not remap:
+        return
+    for d, _, files in os.walk(root):
+        for f in files:
+            if f.endswith(".java"):
+                p = os.path.join(d, f)
+                with io.open(p, encoding="utf-8") as fh:
+                    text = fh.read()
+                with io.open(p, "w", encoding="utf-8", newline="\n") as fh:
+                    fh.write(remap[0].sub(remap[1], text))
+
+
+def copy_shaders(src_dir, assets_dir):
+    """Copies PPSSPP-format shaders (.ini/.fsh/.vsh) into the APK assets."""
+    if not src_dir:
+        return 0
+    os.makedirs(assets_dir, exist_ok=True)
+    n = 0
+    for f in os.listdir(src_dir):
+        if f.lower().endswith((".ini", ".fsh", ".vsh")):
+            shutil.copyfile(os.path.join(src_dir, f), os.path.join(assets_dir, f))
+            n += f.lower().endswith(".ini")
+    return n
+
+
 def write_icon(suite, res_dir):
     data = suite.icon_data()
     if data and data[:8] == b"\x89PNG\r\n\x1a\n":
@@ -229,6 +276,7 @@ def port(args):
             source_classes -= keep
 
     # ------------------------------------------------------- template + runtime
+    engine_pkg = package + ".engine"
     tokens = {
         "@@APP_NAME@@": xml_escape(app_name),
         "@@PROJECT_NAME@@": re.sub(r"[^A-Za-z0-9 _-]", "", app_name) or "J2ME Port",
@@ -246,24 +294,31 @@ def port(args):
     tokens["@@GAME_DEPENDENCY@@"] = ("implementation files('libs/game.jar')" if game_jar_needed
                                      else "// todo el juego está como código fuente en src/main/java")
     copy_tree(paths.template_dir(), out, tokens)
-    rt_out = os.path.join(out, "j2me-runtime")
-    shutil.copytree(paths.runtime_dir(), rt_out, ignore=shutil.ignore_patterns("build", ".gradle"))
+    # Native port: the engine lives in the app's own package (<package>.engine.lcdui.Canvas...),
+    # so the APK contains no javax.microedition / com.nokia classes at all.
+    remap = None if args.keep_j2me_packages else decompile.native_remapper(engine_pkg)
+    copy_engine(os.path.join(out, "engine"), engine_pkg, remap)
 
     app = os.path.join(out, "app")
+    java_root = os.path.join(app, "src", "main", "java")
+    rename_sources(java_root, remap)  # MainActivity imports the engine
     # --------------------------------------------------------------- game code
     libs_dir = os.path.join(app, "libs")
     os.makedirs(libs_dir, exist_ok=True)
     if args.mode == "jar":
-        shutil.copyfile(patched_all, os.path.join(libs_dir, "game.jar"))
+        st = decompile.patch_jar(suite.jar_path, os.path.join(libs_dir, "game.jar"), remap=remap)
     else:
-        java_root = os.path.join(app, "src", "main", "java")
         files = decompile.java_files(src_tmp)
         for c in sorted(source_classes):
             dst = os.path.join(java_root, c.replace("/", os.sep) + ".java")
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copyfile(files[c], dst)
+            with io.open(files[c], encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+            with io.open(dst, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(remap[0].sub(remap[1], text) if remap else text)
         if game_jar_needed:
-            st = decompile.patch_jar(suite.jar_path, os.path.join(libs_dir, "game.jar"), exclude=source_classes)
+            st = decompile.patch_jar(suite.jar_path, os.path.join(libs_dir, "game.jar"),
+                                     exclude=source_classes, remap=remap)
             log("  Código fuente: %d clases | bytecode (libs/game.jar): %d clases" % (
                 len(source_classes), st["classes"]))
         else:
@@ -282,6 +337,10 @@ def port(args):
     write_props(os.path.join(assets, "port.properties"), _port_items(midlet_class, sw, sh, args),
                 "Configuración del port (editable). El jugador puede cambiar algunas opciones\n"
                 "desde el menú del port (botón ☰ del teclado virtual).")
+    n_shader_sets = copy_shaders(args.shaders, os.path.join(app, "src", "main", "assets", "shaders"))
+    if n_shader_sets:
+        log("  Shaders externos: %d archivo(s) .ini copiados (revisa su licencia: los de PPSSPP suelen ser GPL)"
+            % n_shader_sets)
     has_png_icon = write_icon(suite, os.path.join(app, "src", "main", "res"))
 
     sdk = paths.find_android_sdk()
@@ -306,7 +365,10 @@ def _port_items(midlet_class, sw, sh, args):
         ("screen.height", sh),
         ("# fit = mantener proporción | integer = escalado entero (pixel perfect) | stretch = llenar", None),
         ("scale.mode", args.scale),
-        ("scale.filter", "true" if args.filter else "false"),
+        ("# nearest | smooth | sharp | scanlines | lcd | crt | mono | file:<sección de assets/shaders/*.ini>", None),
+        ("shader", args.shader or ("smooth" if args.filter else "nearest")),
+        ("# vsync = sincronizado | dynamic = la pantalla adapta su Hz a los FPS del juego | unlimited", None),
+        ("fps.mode", args.fps_mode),
         ("# full = cruceta + teclado numérico | minimal = cruceta + OK | none", None),
         ("keypad", args.keypad),
         ("keypad.alpha", 150),
@@ -354,7 +416,8 @@ def write_port_info(out, suite, report, midlet_class, sw, sh, why, orientation, 
         "- `app/libs/game.jar` — clases que siguen como bytecode original (parcheado).",
         "- `app/src/main/resources/` — imágenes, sonidos y datos del JAR original.",
         "- `app/src/main/assets/j2a/port.properties` — resolución, escalado, teclado, FPS...",
-        "- `j2me-runtime/` — la implementación de J2ME sobre Android (javax.microedition.*, Nokia, Samsung).",
+        "- `engine/` — motor del port (gráficos OpenGL, audio, entrada, guardado) en el paquete `%s.engine`."
+        % package,
         "",
         "## APIs",
         "",

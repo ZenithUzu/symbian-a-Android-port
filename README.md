@@ -66,7 +66,11 @@ python tool/j2a.py decompile Juego.jar -o Juego-src
 |---|---|
 | `--screen 240x320` | Resolución virtual. Si no la indicas, j2a la deduce del manifiesto (`Nokia-MIDlet-Original-Display-Size`), del nombre del archivo (`Juego_176x208.jar`) o de las imágenes. |
 | `--orientation portrait/landscape/auto` | Orientación de la app. |
-| `--scale fit/integer/stretch`, `--filter` | Escalado y suavizado. |
+| `--scale fit/integer/stretch` | Escalado. |
+| `--shader sharp` | Shader por defecto: `nearest`, `smooth`, `sharp`, `scanlines`, `lcd`, `crt`, `mono`. |
+| `--shaders carpeta/` | Incluye shaders en formato PPSSPP (`.ini` + `.fsh` [+ `.vsh`]), p. ej. los de [jdgleaver/ppsspp_shaders](https://github.com/jdgleaver/ppsspp_shaders). Ojo: esos son GPL. |
+| `--fps-mode vsync/dynamic/unlimited` | Sincronizado con la pantalla, dinámico (la pantalla adapta sus Hz a los FPS del juego) o sin límite. |
+| `--keep-j2me-packages` | No renombrar las APIs al paquete del motor (ver "Port nativo"). |
 | `--keypad full/minimal/none` | Teclado virtual en pantalla. |
 | `--fps 30` | Limita los FPS (muchos juegos van demasiado rápido en móviles actuales). |
 | `--package com.yo.juego`, `--name "Mi Juego"` | ID y nombre de la app. |
@@ -82,8 +86,11 @@ Todas las opciones de ejecución se pueden cambiar después en
 
 El jugador puede cambiar desde el **menú del port** (botón ☰ del teclado virtual, o Escape):
 resolución (128x160 … 640x360 y **widescreen** con la proporción del móvil), rotación
-(automática/vertical/horizontal), escalado (proporcional, entero, estirar), suavizado,
-límite de FPS (15–60), contador de FPS, teclado virtual y sonido. Se guardan entre sesiones.
+(automática/vertical/horizontal), escalado (proporcional, entero, estirar), **shader**
+(nítido, suavizado, sharp bilinear, scanlines, rejilla LCD, CRT, LCD verde monocromo y los PPSSPP que
+incluyas), **modo de FPS** (vsync, dinámico, sin límite), límite de FPS (15–120), contador de FPS,
+teclado virtual, opacidad, vibración, sonido, **captura de pantalla** y restablecer opciones.
+Se guardan entre sesiones.
 
 ## Cómo funciona
 
@@ -94,7 +101,17 @@ límite de FPS (15–60), contador de FPS, teclado virtual y sonido. Se guardan 
 3. **Descompilación** — Vineflower (o CFR) con el runtime como biblioteca para resolver tipos.
 4. **Verificación** — compila el código con `javac` contra tu `android.jar`; lo que no compila
    vuelve a bytecode. El proyecto generado compila siempre.
-5. **Proyecto** — plantilla Gradle + módulo `j2me-runtime` + recursos + icono del MIDlet.
+5. **Proyecto** — plantilla Gradle + módulo `engine` + recursos + icono del MIDlet.
+
+### Port nativo, sin emulador
+
+No hay intérprete ni máquina virtual de J2ME dentro del APK: el código del juego se compila a DEX
+y corre directo en ART, como cualquier app. Las llamadas que antes iban al teléfono
+(`Canvas`, `Graphics`, `RecordStore`, `Player`...) van al módulo `engine`, que está escrito con APIs
+de Android (OpenGL ES, MediaPlayer, AudioTrack, archivos, táctil). Además j2a **renombra** esas APIs
+al paquete propio del port (`com.tu.juego.engine.lcdui.Canvas`, `...engine.rms.RecordStore`), tanto
+en el código descompilado como en el bytecode, así que el APK final no contiene ninguna clase
+`javax.microedition` ni `com.nokia`.
 
 Más detalle:
 
@@ -115,7 +132,7 @@ Bluetooth, FileConnection.
 ```
 tool/j2a.py              CLI (analyze, decompile, port, patch, verify, doctor)
 tool/j2a_tool/           parser de .class, parche de bytecode, descompilación, generador
-runtime/                 módulo Android "j2me-runtime": javax.microedition.* sobre Android
+runtime/                 motor del port (se copia como módulo "engine" y se renombra al paquete del juego)
 template/                plantilla del proyecto Android Studio (Gradle 9.3.1, AGP 9.1.1, compileSdk/targetSdk 37)
 samples/demo-midlet/     juego J2ME de prueba (GameCanvas, Sprite, RMS, Forms, sonido)
 docs/                    documentación

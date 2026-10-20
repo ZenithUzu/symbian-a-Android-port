@@ -9,8 +9,14 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Mejora | Opción |
 |---|---|
 | Escalado a cualquier pantalla: proporcional, entero (pixel-perfect) o estirado | `scale.mode=fit|integer|stretch` |
-| Suavizado bilineal opcional | `scale.filter=true` |
-| Dibujado por GPU en Android 8+ (`lockHardwareCanvas`) | automático |
+| Shaders por GPU (OpenGL ES 2.0): nítido, suavizado, *sharp bilinear*, scanlines, rejilla LCD, CRT, LCD verde | `shader=...`, menú |
+| Shaders externos en formato PPSSPP (`.ini/.fsh/.vsh`), p. ej. jdgleaver/ppsspp_shaders | `--shaders carpeta/` |
+| Modo de FPS: **vsync** (como el `flushGraphics` bloqueante de un teléfono), **dinámico** (Android 11+ cambia la tasa de refresco de la pantalla a la de los FPS del juego: 30/48/60/90/120 Hz, más fluido y menos batería) o sin límite | `fps.mode`, menú |
+| Captura de pantalla escalada sin borrosidad a la galería | menú |
+| El teclado táctil se oculta solo al usar mando o teclado y vuelve al tocar la pantalla | automático |
+| Botones de volumen controlan el volumen del juego | automático |
+| Un hilo del juego que lanza una excepción ya no cierra la app (como en el teléfono, solo termina ese hilo) | automático |
+| En segundo plano el juego no consume CPU aunque su bucle no tenga `sleep()` | automático |
 | Teclado virtual multitáctil: cruceta con diagonales (1/3/7/9), teclado numérico, soft keys con el nombre del comando | `keypad=full|minimal|none`, `keypad.alpha`, `keypad.haptics` |
 | Mandos y teclados físicos (cruceta, A/B/X/Y, L1/R1, Start/Select, WASD, números) | automático |
 | Pantalla táctil enviada al juego como `pointerPressed/Dragged/Released` | automático |
@@ -43,7 +49,11 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 - `CustomItem` dentro de formularios es básico.
 - El runtime está verificado en compilación contra la API de Android y el parche de bytecode contra
   el verificador de la JVM; cada juego real puede destapar comportamientos que haya que ajustar en
-  `j2me-runtime/` — por eso el runtime se copia dentro de cada proyecto, para que puedas tocarlo.
+  `engine/` — por eso el motor se copia dentro de cada proyecto, para que puedas tocarlo.
+- No hay "save states" (guardar en cualquier momento): un port nativo no puede congelar el estado
+  de la memoria como un emulador. El juego guarda con su propio sistema (RMS), que sí funciona.
+- Los shaders de jdgleaver/ppsspp_shaders son GPL v2+: si los incluyes con `--shaders`, el APK
+  que distribuyas queda sujeto a esa licencia. Los shaders integrados son código propio.
 
 ## Cómo añadir una API que falta
 
