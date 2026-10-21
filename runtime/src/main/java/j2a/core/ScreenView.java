@@ -240,16 +240,26 @@ public class ScreenView extends View {
         }
     }
 
-    /** dpad_pressed_one is "up" and dpad_pressed_two "up + left": turned for the other directions. */
+    /**
+     * dpad_up, dpad_down_left... : one picture per direction, so the light on the relief never turns.
+     * A skin in Citra's format (dpad_pressed_one = up, dpad_pressed_two = up + left) is turned instead.
+     */
     private void drawDpad(Canvas c, Button b) {
         int m = b.mask; // up 1, down 2, left 4, right 8
         boolean up = (m & 1) != 0, down = (m & 2) != 0, left = (m & 4) != 0, right = (m & 8) != 0;
-        if ((up || down) && (left || right)) {
-            drawImage(c, img("dpad_pressed_two"), b.r, up ? (left ? 0 : 90) : (right ? 180 : 270));
-        } else if (m != 0) {
-            drawImage(c, img("dpad_pressed_one"), b.r, up ? 0 : right ? 90 : down ? 180 : 270);
-        } else {
+        if (m == 0) {
             drawImage(c, img("dpad"), b.r, 0);
+            return;
+        }
+        boolean diag = (up || down) && (left || right);
+        String name = "dpad_" + (diag ? (up ? "up_" : "down_") + (left ? "left" : "right")
+                : up ? "up" : down ? "down" : left ? "left" : "right");
+        if (img(name) != null) {
+            drawImage(c, img(name), b.r, 0);
+        } else if (diag) {
+            drawImage(c, img("dpad_pressed_two"), b.r, up ? (left ? 0 : 90) : (right ? 180 : 270));
+        } else {
+            drawImage(c, img("dpad_pressed_one"), b.r, up ? 0 : right ? 90 : down ? 180 : 270);
         }
     }
 
