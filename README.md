@@ -28,13 +28,18 @@ python tool/j2a.py doctor      # comprueba Java, SDK y descompiladores
 
 Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`). En Windows, si no abre o sale un error de "Python Launcher", usa **`j2a-gui.bat`**: muestra el error en vez de cerrarse.
 
-1. **Juegos (.jar) → Elegir…** (con Ctrl o Mayús eliges varios) o **arrastra** uno o varios `.jar`
-   a la ventana. También puedes soltarlos sobre `j2a-gui.bat` y la ventana se abre con ellos cargados.
-2. **Guardar en**: vacío = cada proyecto queda junto a su `.jar` (`Juego-android`); o elige una carpeta
-   para todos.
-3. Ajusta resolución, rotación, shader, FPS y teclado si quieres (se aplican a todos). Lo automático suele bastar.
-4. **Generar port**: se generan uno tras otro; si uno falla, los demás siguen y al final ves el resumen.
-5. **Abrir carpeta** y ábrela en Android Studio (File → Open) → Run ▶.
+1. **Arrastra** uno o varios `.jar` a la lista (o **Añadir juegos…**, o suéltalos sobre `j2a-gui.bat`).
+   Cada juego muestra su nombre, su paquete y dónde se creará su proyecto, todo automático.
+2. Si quieres cambiar algo de un juego (nombre, paquete o carpeta), haz **doble clic** en él.
+3. **Guardar**: *junto a cada juego* (`Juego-android` al lado de su `.jar`) o *en esta carpeta*, que
+   queda como carpeta por defecto la próxima vez.
+4. **Crear ports**. Se crean uno tras otro; si uno falla, los demás siguen. Si un proyecto ya existe,
+   la ventana pregunta si reemplazarlo.
+5. **Abrir carpeta** y ábrela en Android Studio (File → Open) → Run ▶. Ese proyecto es el código ya
+   descompilado: lo puedes corregir o mejorar ahí mismo.
+
+**Opciones** (plegadas, todo automático por defecto): resolución, rotación, pantalla, shader, FPS y teclado,
+que se aplican a todos los juegos de la lista.
 
 Arrastrar dentro de la ventana usa el paquete `tkinterdnd2`: `j2a-gui.bat` lo instala solo la primera vez
 (o `python -m pip install tkinterdnd2`). Sin él, todo lo demás funciona igual.

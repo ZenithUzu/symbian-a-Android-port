@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""j2a con interfaz gráfica. En Windows basta con doble clic en este archivo.
+"""j2a con interfaz gráfica. En Windows basta con doble clic en este archivo (o en j2a-gui.bat).
 
 Es una ventana encima de los mismos comandos de tool/j2a.py: lo que genera es idéntico.
 """
 import contextlib
+import json
+import re
 import os
 import queue
 import subprocess
@@ -15,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "too
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog, messagebox, ttk  # noqa: E402
 
-from j2a_tool import cli, generate  # noqa: E402
+from j2a_tool import cli, generate, paths  # noqa: E402
 from j2a_tool.jarinfo import MidletSuite  # noqa: E402
 
 try:  # optional: drop .jar files onto the window (pip install tkinterdnd2; j2a-gui.bat installs it)
@@ -47,30 +49,69 @@ KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruc
            ("Cruceta + OK", "minimal"), ("Sin teclado (el juego trae controles táctiles)", "none")]
 
 
-def project_dir(jar, out_root):
+# Colores: la lista de juegos imita la pantalla LCD de un teléfono Nokia; el resto queda sobrio.
+PAPER, INK, MUTED = "#EEF0EC", "#1E2420", "#5F6B63"
+LCD, LCD_INK = "#B8C4A0", "#26301C"
+ACCENT, ACCENT_DOWN, BAD = "#2F4A5C", "#223745", "#8A2E22"
+
+PREFS = os.path.join(paths.cache_dir(), "gui.json")
+
+
+def load_prefs():
+    try:
+        with open(PREFS, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_prefs(prefs):
+    try:
+        os.makedirs(os.path.dirname(PREFS), exist_ok=True)
+        with open(PREFS, "w", encoding="utf-8") as f:
+            json.dump(prefs, f)
+    except OSError:
+        pass  # only a convenience: the window works without it
+
+
+def project_dir(jar, out_root, name=None):
     """<carpeta>/<Nombre oficial>-android; sin carpeta elegida, junto al .jar."""
-    try:  # official game name from the manifest, not the downloaded file name
-        name = generate.display_file_name(MidletSuite(jar).name)
-    except Exception:  # noqa: BLE001 - unreadable jar: the port itself will explain
-        name = os.path.splitext(os.path.basename(jar))[0]
-    return os.path.join(out_root or os.path.dirname(os.path.abspath(jar)), name + "-android")
+    if not name:
+        try:  # official game name from the manifest, not the downloaded file name
+            name = MidletSuite(jar).name
+        except Exception:  # noqa: BLE001 - unreadable jar: the port itself will explain
+            name = os.path.splitext(os.path.basename(jar))[0]
+    return os.path.join(out_root or os.path.dirname(os.path.abspath(jar)),
+                        generate.display_file_name(name) + "-android")
 
 
 def jar_paths(paths_):
     """Solo los .jar (los .jad que acompañan a un .jar se usan solos), sin repetir."""
     out = []
     for p in paths_:
+        p = os.path.abspath(p)
         if p.lower().endswith(".jar") and os.path.isfile(p) and p not in out:
             out.append(p)
     return out
+
+
+def game_info(jar):
+    """Nombre y paquete que j2a usará solo, para mostrarlos en la lista."""
+    try:
+        suite = MidletSuite(jar)
+        midlets = suite.midlets()
+        return suite.name, generate.official_package(suite, midlets[0]["class"] if midlets else None)
+    except Exception:  # noqa: BLE001 - unreadable jar: the port itself will explain
+        return os.path.splitext(os.path.basename(jar))[0], "?"
 
 
 def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
     a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
          "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--scale", v.get("scale") or "fit"]
-    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("screen", "--screen"), ("orientation", "--orientation"), ("name", "--name"),
-                      ("package", "--package"), ("shaders", "--shaders")):
+    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("screen", "--screen"),
+                      ("orientation", "--orientation"), ("name", "--name"), ("package", "--package"),
+                      ("shaders", "--shaders")):
         if v.get(key):
             a += [flag, v[key]]
     if v.get("force"):
@@ -106,65 +147,155 @@ def run_one(argv, q):
         return False
 
 
+class Game:
+    def __init__(self, jar):
+        self.jar = jar
+        self.auto_name, self.auto_package = game_info(jar)
+        self.name = self.package = self.folder = ""  # "" = automático
+        self.status = "Pendiente"
+
+    def out(self, root):
+        return self.folder or project_dir(self.jar, root, self.name or self.auto_name)
+
+
 class App(BaseTk):
     def __init__(self, initial=()):
         super().__init__()
-        self.title("j2a — Ports de juegos J2ME a Android")
-        self.minsize(640, 560)
+        self.title("j2a — juegos Java a Android")
+        self.minsize(760, 560)
+        self.configure(bg=PAPER)
         self.q = queue.Queue()
         self.busy = False
+        self.games = {}  # jar path -> Game, in list order
+        self.prefs = load_prefs()
         self.vars = {}
-        self.jars = []
-        f = ttk.Frame(self, padding=12)
+        self.style_window()
+
+        f = ttk.Frame(self, padding=(18, 14, 18, 14))
         f.pack(fill="both", expand=True)
-        f.columnconfigure(1, weight=1)
-        r = 0
-        r = self.file_row(f, r, "Juegos (.jar)", "jar", self.pick_jar)
-        r = self.file_row(f, r, "Guardar en (vacío = junto a cada .jar)", "out", self.pick_out)
-        r = self.entry_row(f, r, "Nombre de la app (opcional, 1 juego)", "name")
-        r = self.entry_row(f, r, "Paquete (opcional, 1 juego)", "package")
-        r = self.combo_row(f, r, "Modo", "mode", MODES)
-        r = self.combo_row(f, r, "Resolución", "screen", SCREENS)
-        r = self.combo_row(f, r, "Rotación", "orientation", ORIENTATIONS)
-        r = self.combo_row(f, r, "Pantalla", "scale", SCALES)
-        r = self.combo_row(f, r, "Girar imagen", "rotate", ROTATIONS)
-        r = self.combo_row(f, r, "Shader", "shader", SHADERS)
-        r = self.combo_row(f, r, "Modo de FPS", "fps_mode", FPS_MODES)
-        r = self.combo_row(f, r, "Límite de FPS", "fps", FPS_LIMITS)
-        r = self.combo_row(f, r, "Teclado táctil", "keypad", KEYPADS)
-        r = self.file_row(f, r, "Shaders PPSSPP (opcional)", "shaders", self.pick_shaders)
-        self.vars["force"] = tk.BooleanVar(value=False)
-        ttk.Checkbutton(f, text="Reemplazar la carpeta si ya existe", variable=self.vars["force"]).grid(
-            row=r, column=1, sticky="w", pady=(4, 8))
-        r += 1
+        f.columnconfigure(0, weight=1)
 
-        bar = ttk.Frame(f)
-        bar.grid(row=r, column=0, columnspan=3, sticky="ew", pady=4)
-        self.buttons = [
-            ttk.Button(bar, text="Comprobar entorno", command=lambda: self.run(["doctor"])),
-            ttk.Button(bar, text="Analizar juego", command=self.analyze),
-            ttk.Button(bar, text="Generar port", command=self.port),
-            ttk.Button(bar, text="Abrir carpeta", command=self.open_out),
-        ]
-        for b in self.buttons:
-            b.pack(side="left", padx=(0, 6))
-        r += 1
+        ttk.Label(f, text="Juegos", style="H.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(f, text="Arrastra aquí tus .jar. Doble clic en uno para cambiar su nombre, paquete o carpeta.",
+                  style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 6))
+        self.list_frame = tk.Frame(f, bg=LCD, highlightthickness=2, highlightbackground=LCD_INK)
+        self.list_frame.grid(row=2, column=0, sticky="nsew")
+        f.rowconfigure(2, weight=1, minsize=150)
+        self.tree = ttk.Treeview(self.list_frame, columns=("name", "pkg", "out", "status"), show="headings",
+                                 style="LCD.Treeview", selectmode="extended", height=6)
+        for col, text, w in (("name", "Juego", 170), ("pkg", "Paquete", 180), ("out", "Se guarda en", 230),
+                             ("status", "Estado", 110)):
+            self.tree.heading(col, text=text, anchor="w")
+            self.tree.column(col, width=w, minwidth=60, anchor="w", stretch=col in ("name", "out"))
+        self.tree.pack(fill="both", expand=True, padx=2, pady=2)
+        self.tree.tag_configure("bad", foreground=BAD)
+        self.tree.bind("<Double-1>", lambda e: self.edit_game())
+        self.tree.bind("<Return>", lambda e: self.edit_game())
+        self.tree.bind("<Delete>", lambda e: self.remove_games())
+        self.empty = tk.Label(self.list_frame, text="Suelta aquí tus juegos .jar\no pulsa «Añadir juegos»",
+                              bg=LCD, fg=LCD_INK, font=self.fonts["lcd_big"], cursor="hand2")
+        self.empty.bind("<Button-1>", lambda e: self.add_games())
 
-        self.log = tk.Text(f, height=14, wrap="word", state="disabled")
-        self.log.grid(row=r, column=0, columnspan=3, sticky="nsew", pady=(6, 0))
-        f.rowconfigure(r, weight=1)
-        self.write("1. Elige o arrastra uno o varios .jar  2. Pulsa «Generar port»  "
-                   "3. Abre la carpeta en Android Studio y pulsa Run.\n")
+        row = ttk.Frame(f)
+        row.grid(row=3, column=0, sticky="ew", pady=(8, 14))
+        ttk.Button(row, text="Añadir juegos…", command=self.add_games).pack(side="left")
+        ttk.Button(row, text="Quitar", command=self.remove_games).pack(side="left", padx=(6, 0))
+        ttk.Button(row, text="Abrir carpeta", command=self.open_out).pack(side="right")
+
+        # where to save: next to each game, or a remembered default folder
+        save = ttk.Frame(f)
+        save.grid(row=4, column=0, sticky="ew")
+        save.columnconfigure(2, weight=1)
+        ttk.Label(save, text="Guardar", style="H2.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.vars["where"] = tk.StringVar(value="folder" if self.prefs.get("out_root") else "beside")
+        self.vars["out"] = tk.StringVar(value=self.prefs.get("out_root", ""))
+        ttk.Radiobutton(save, text="Junto a cada juego", value="beside", variable=self.vars["where"],
+                        command=self.refresh).grid(row=0, column=1, sticky="w")
+        ttk.Radiobutton(save, text="En esta carpeta:", value="folder", variable=self.vars["where"],
+                        command=self.choose_root_if_empty).grid(row=1, column=1, sticky="w")
+        ttk.Label(save, textvariable=self.vars["out"], style="Muted.TLabel").grid(row=1, column=2, sticky="w")
+        ttk.Button(save, text="Cambiar…", command=self.pick_out).grid(row=1, column=3, sticky="e")
+
+        # options: all automatic unless opened
+        self.opts_open = tk.BooleanVar(value=False)
+        self.opts_btn = ttk.Button(f, style="Link.TButton", command=self.toggle_options)
+        self.opts_btn.grid(row=5, column=0, sticky="w", pady=(12, 0))
+        self.opts = ttk.Frame(f, padding=(14, 6, 0, 0))
+        self.opts.columnconfigure(1, weight=1)
+        self.opts.columnconfigure(3, weight=1)
+        cells = [("Modo", "mode", MODES), ("Resolución", "screen", SCREENS), ("Rotación", "orientation", ORIENTATIONS),
+                 ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Shader", "shader", SHADERS),
+                 ("Modo de FPS", "fps_mode", FPS_MODES), ("Límite de FPS", "fps", FPS_LIMITS),
+                 ("Teclado táctil", "keypad", KEYPADS)]
+        for i, (label, key, options) in enumerate(cells):
+            self.combo(self.opts, i // 2, (i % 2) * 2, label, key, options)
+        r = len(cells) // 2 + 1
+        self.vars["shaders"] = tk.StringVar()
+        ttk.Label(self.opts, text="Shaders PPSSPP").grid(row=r, column=0, sticky="w", pady=3)
+        ttk.Button(self.opts, text="Elegir carpeta…", command=self.pick_shaders).grid(row=r, column=1, sticky="w")
+        ttk.Label(self.opts, textvariable=self.vars["shaders"], style="Muted.TLabel").grid(
+            row=r, column=2, columnspan=2, sticky="w")
+        ttk.Button(self.opts, text="Comprobar Java y Android SDK", command=lambda: self.run([["doctor"]])).grid(
+            row=r + 1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.update_options_label()
+
+        bottom = ttk.Frame(f)
+        bottom.grid(row=7, column=0, sticky="ew", pady=(16, 0))
+        bottom.columnconfigure(1, weight=1)
+        self.go = ttk.Button(bottom, text="Crear ports", style="Primary.TButton", command=self.port)
+        self.go.grid(row=0, column=0, sticky="w")
+        self.status = tk.StringVar()
+        ttk.Label(bottom, textvariable=self.status, style="Muted.TLabel").grid(row=0, column=1, sticky="w", padx=12)
+        self.log_btn = ttk.Button(bottom, text="Ver detalles", style="Link.TButton", command=self.toggle_log)
+        self.log_btn.grid(row=0, column=2, sticky="e")
+        self.log = tk.Text(f, height=10, wrap="word", state="disabled", bg="#F7F8F5", fg=INK, relief="flat",
+                           font=self.fonts["mono"], highlightthickness=1, highlightbackground="#C9CEC7")
+
         if DND_FILES:
             for w in [self] + self.descendants(self):
                 w.drop_target_register(DND_FILES)
-                w.dnd_bind("<<Drop>>", lambda e: self.set_jars(self.tk.splitlist(e.data)))
+                w.dnd_bind("<<Drop>>", lambda e: self.add_paths(self.tk.splitlist(e.data)))
         else:
-            self.write("(Para arrastrar .jar a esta ventana: python -m pip install tkinterdnd2. "
-                       "También puedes soltarlos sobre j2a-gui.bat.)\n")
+            self.write("Para arrastrar .jar a esta ventana: python -m pip install tkinterdnd2 "
+                       "(j2a-gui.bat lo instala solo). También puedes soltarlos sobre j2a-gui.bat.\n")
+        self.refresh()
         if initial:
-            self.set_jars(initial)
+            self.add_paths(initial)
         self.after(100, self.poll)
+
+    # ----------------------------------------------------------------- look
+    def style_window(self):
+        from tkinter import font as tkfont
+        base = tkfont.nametofont("TkDefaultFont").actual()["family"]
+        if "Segoe UI" in tkfont.families():
+            base = "Segoe UI"
+        mono = "Consolas" if "Consolas" in tkfont.families() else "TkFixedFont"
+        self.fonts = {"body": (base, 10), "h": (base, 15, "bold"), "h2": (base, 10, "bold"),
+                      "lcd": (base, 10, "bold"), "lcd_big": (base, 13, "bold"), "mono": (mono, 9)}
+        st = ttk.Style(self)
+        st.theme_use("clam")  # the only built-in theme that takes these colors on every system
+        st.configure(".", background=PAPER, foreground=INK, font=self.fonts["body"])
+        st.configure("TFrame", background=PAPER)
+        st.configure("H.TLabel", font=self.fonts["h"])
+        st.configure("H2.TLabel", font=self.fonts["h2"])
+        st.configure("Muted.TLabel", foreground=MUTED)
+        st.configure("TButton", padding=(10, 4), background="#DDE1DA", bordercolor="#B9BFB6")
+        st.map("TButton", background=[("active", "#D0D5CD")])
+        st.configure("Primary.TButton", padding=(22, 8), background=ACCENT, foreground="white",
+                     bordercolor=ACCENT, font=self.fonts["h2"])
+        st.map("Primary.TButton", background=[("disabled", "#9AA8B2"), ("pressed", ACCENT_DOWN), ("active", ACCENT_DOWN)])
+        st.configure("Link.TButton", padding=(0, 2), background=PAPER, bordercolor=PAPER, foreground=ACCENT,
+                     relief="flat")
+        st.map("Link.TButton", background=[("active", PAPER)], foreground=[("active", ACCENT_DOWN)])
+        st.configure("TRadiobutton", background=PAPER)
+        st.configure("TCheckbutton", background=PAPER)
+        st.configure("LCD.Treeview", background=LCD, fieldbackground=LCD, foreground=LCD_INK,
+                     font=self.fonts["lcd"], rowheight=26, borderwidth=0)
+        st.configure("LCD.Treeview.Heading", background=LCD, foreground=LCD_INK, font=self.fonts["body"],
+                     relief="flat", borderwidth=0)
+        st.map("LCD.Treeview.Heading", background=[("active", LCD)])
+        # selected row = inverted pixels, like the menus of those phones
+        st.map("LCD.Treeview", background=[("selected", LCD_INK)], foreground=[("selected", LCD)])
 
     @classmethod
     def descendants(cls, w):
@@ -173,56 +304,151 @@ class App(BaseTk):
             out += [c] + cls.descendants(c)
         return out
 
-    def set_jars(self, paths_):
-        jars = jar_paths(paths_)
-        if not jars:
-            messagebox.showwarning("j2a", "Eso no es un archivo .jar.")
-            return
-        self.jars = jars
-        self.vars["jar"].set(jars[0] if len(jars) == 1 else "%d juegos: " % len(jars) + ", ".join(
-            os.path.basename(j) for j in jars))
-        if len(jars) > 1:
-            self.write("%d juegos listos: %s\n" % (len(jars), ", ".join(os.path.basename(j) for j in jars)))
-
-    # ------------------------------------------------------------------ rows
-    def entry_row(self, f, r, label, key):
-        ttk.Label(f, text=label).grid(row=r, column=0, sticky="w", pady=2)
-        self.vars[key] = tk.StringVar()
-        ttk.Entry(f, textvariable=self.vars[key]).grid(row=r, column=1, columnspan=2, sticky="ew", pady=2)
-        return r + 1
-
-    def file_row(self, f, r, label, key, cmd):
-        ttk.Label(f, text=label).grid(row=r, column=0, sticky="w", pady=2)
-        self.vars[key] = tk.StringVar()
-        ttk.Entry(f, textvariable=self.vars[key]).grid(row=r, column=1, sticky="ew", pady=2)
-        ttk.Button(f, text="Elegir…", command=cmd).grid(row=r, column=2, padx=(6, 0), pady=2)
-        return r + 1
-
-    def combo_row(self, f, r, label, key, options):
-        ttk.Label(f, text=label).grid(row=r, column=0, sticky="w", pady=2)
+    def combo(self, parent, r, c, label, key, options):
+        ttk.Label(parent, text=label).grid(row=r, column=c, sticky="w", pady=3, padx=(0 if c == 0 else 14, 8))
         var = tk.StringVar(value=options[0][0])
         self.vars[key] = var
         self.vars[key + "#opts"] = dict(options)
-        ttk.Combobox(f, textvariable=var, values=[o[0] for o in options], state="readonly").grid(
-            row=r, column=1, columnspan=2, sticky="ew", pady=2)
-        return r + 1
+        cb = ttk.Combobox(parent, textvariable=var, values=[o[0] for o in options], state="readonly", width=30)
+        cb.grid(row=r, column=c + 1, sticky="ew", pady=3)
+        cb.bind("<<ComboboxSelected>>", lambda e: self.update_options_label())
+        self.vars[key + "#default"] = options[0][0]
+        self.vars[key + "#label"] = label
 
     def value(self, key):
         v = self.vars[key].get()
         opts = self.vars.get(key + "#opts")
         return opts[v] if opts else v.strip()
 
-    # --------------------------------------------------------------- pickers
-    def pick_jar(self):
-        ps = filedialog.askopenfilenames(title="Elige uno o varios juegos (Ctrl o Mayús para varios)",
-                                         filetypes=[("Juegos J2ME", "*.jar"), ("Todos", "*.*")])
+    # ---------------------------------------------------------------- list
+    def out_root(self):
+        return self.vars["out"].get() if self.vars["where"].get() == "folder" else ""
+
+    def refresh(self):
+        """Redraws the game list from self.games."""
+        self.tree.delete(*self.tree.get_children())
+        root = self.out_root()
+        for jar, g in self.games.items():
+            out = g.out(root)  # the full path is in the edit window; here the part that tells them apart
+            short = os.path.join("…", os.path.basename(os.path.dirname(out)), os.path.basename(out))
+            self.tree.insert("", "end", iid=jar, values=(g.name or g.auto_name, g.package or g.auto_package,
+                                                         short, g.status),
+                             tags=("bad",) if g.status == "Falló" else ())
+        if self.games:
+            self.empty.place_forget()
+        else:
+            self.empty.place(relx=0.5, rely=0.5, anchor="center")
+        n = len(self.games)
+        self.go.configure(text="Crear port" if n == 1 else "Crear %d ports" % n if n else "Crear ports")
+
+    def add_paths(self, paths_):
+        jars = jar_paths(paths_)
+        if not jars:
+            messagebox.showwarning("j2a", "Solo se pueden añadir archivos .jar.")
+            return
+        for j in jars:
+            if j not in self.games:
+                self.games[j] = Game(j)
+        self.refresh()
+
+    def add_games(self):
+        ps = filedialog.askopenfilenames(title="Añadir juegos (Ctrl o Mayús para elegir varios)",
+                                         filetypes=[("Juegos Java", "*.jar"), ("Todos", "*.*")])
         if ps:
-            self.set_jars(ps)
+            self.add_paths(ps)
+
+    def remove_games(self):
+        if self.busy:
+            return
+        for jar in self.tree.selection():
+            self.games.pop(jar, None)
+        self.refresh()
+
+    def edit_game(self):
+        sel = self.tree.selection()
+        if not sel or self.busy:
+            return
+        g = self.games[sel[0]]
+        d = tk.Toplevel(self, bg=PAPER, padx=18, pady=14)
+        d.title(g.auto_name)
+        d.transient(self)
+        d.columnconfigure(1, weight=1)
+        ttk.Label(d, text=os.path.basename(g.jar), style="H2.TLabel").grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(d, text="Deja un campo vacío para usar el valor automático.", style="Muted.TLabel").grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        fields = {}
+        for i, (label, key, auto) in enumerate((("Nombre de la app", "name", g.auto_name),
+                                                ("Paquete", "package", g.auto_package),
+                                                ("Carpeta del proyecto", "folder", g.out(self.out_root())))):
+            r = 2 + 2 * i
+            ttk.Label(d, text=label).grid(row=r, column=0, sticky="w", padx=(0, 10), pady=3)
+            fields[key] = tk.StringVar(value=getattr(g, key))
+            ttk.Entry(d, textvariable=fields[key], width=46).grid(row=r, column=1, sticky="ew", pady=(3, 0))
+            ttk.Label(d, text="Automático: " + auto, style="Muted.TLabel").grid(
+                row=r + 1, column=1, sticky="w", pady=(0, 6))
+            if key == "folder":
+                ttk.Button(d, text="Elegir…", command=lambda v=fields[key]: v.set(
+                    filedialog.askdirectory(parent=d, title="Carpeta del proyecto") or v.get())).grid(
+                    row=r, column=2, padx=(6, 0))
+
+        def save():
+            pkg = fields["package"].get().strip()
+            if pkg and not re.match(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$", pkg):
+                messagebox.showwarning("j2a", "El paquete debe ser como com.estudio.juego (minúsculas, con puntos).",
+                                       parent=d)
+                return
+            g.name, g.package, g.folder = fields["name"].get().strip(), pkg, fields["folder"].get().strip()
+            d.destroy()
+            self.refresh()
+
+        bar = ttk.Frame(d)
+        bar.grid(row=8, column=0, columnspan=3, sticky="e", pady=(8, 0))
+        ttk.Button(bar, text="Cancelar", command=d.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="Guardar", style="Primary.TButton", command=save).pack(side="right")
+        d.bind("<Return>", lambda e: save())
+        d.bind("<Escape>", lambda e: d.destroy())
+        d.grab_set()
+
+    # ------------------------------------------------------------- options
+    def toggle_options(self):
+        self.opts_open.set(not self.opts_open.get())
+        if self.opts_open.get():
+            self.opts.grid(row=6, column=0, sticky="ew")
+        else:
+            self.opts.grid_forget()
+        self.update_options_label()
+
+    def update_options_label(self):
+        changed = ["%s: %s" % (self.vars[k + "#label"], self.vars[k].get().split(" (")[0])
+                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "fps_mode", "fps", "keypad")
+                   if self.vars[k].get() != self.vars[k + "#default"]]
+        summary = "todo automático" if not changed else ", ".join(changed)
+        self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Opciones: " + summary)
+
+    def toggle_log(self, show=None):
+        show = not self.log.winfo_ismapped() if show is None else show
+        if show:
+            self.log.grid(row=8, column=0, sticky="nsew", pady=(10, 0))
+        else:
+            self.log.grid_forget()
+        self.log_btn.configure(text="Ocultar detalles" if show else "Ver detalles")
+
+    # --------------------------------------------------------------- pickers
+    def choose_root_if_empty(self):
+        if not self.vars["out"].get():
+            self.pick_out()
+        self.refresh()
 
     def pick_out(self):
-        p = filedialog.askdirectory(title="Carpeta donde guardar el proyecto")
+        p = filedialog.askdirectory(title="Carpeta donde se guardan los proyectos")
         if p:
             self.vars["out"].set(p)
+            self.vars["where"].set("folder")
+            self.prefs["out_root"] = p
+            save_prefs(self.prefs)
+        elif not self.vars["out"].get():
+            self.vars["where"].set("beside")
+        self.refresh()
 
     def pick_shaders(self):
         p = filedialog.askdirectory(title="Carpeta con shaders .ini/.fsh (formato PPSSPP)")
@@ -230,66 +456,75 @@ class App(BaseTk):
             self.vars["shaders"].set(p)
 
     # --------------------------------------------------------------- actions
-    def need_jars(self):
-        typed = self.value("jar")  # a path typed or pasted by hand
-        if os.path.isfile(typed) and typed not in self.jars:
-            self.jars = jar_paths([typed])
-        if not self.jars:
-            messagebox.showwarning("j2a", "Primero elige o arrastra el .jar del juego (o varios).")
-        return self.jars
-
-    def analyze(self):
-        self.run([["analyze", j] for j in self.need_jars()])
-
     def port(self):
-        jars = self.need_jars()
-        if not jars:
+        if not self.games:
+            self.add_games()
             return
-        out_root = self.value("out")
-        if out_root and len(jars) == 1 and out_root.endswith("-android"):
-            out_root = os.path.dirname(out_root)  # a project folder from older versions of this window
+        if self.vars["where"].get() == "beside" and self.prefs.get("out_root"):
+            self.prefs.pop("out_root")  # remember "next to each game" as the default too
+            save_prefs(self.prefs)
+        root = self.out_root()
         v = {k: self.value(k) for k in ("mode", "screen", "orientation", "shader", "fps_mode", "fps",
                                         "keypad", "shaders", "rotate", "scale")}
-        if len(jars) == 1:  # name and package belong to one game
-            v.update(name=self.value("name"), package=self.value("package"))
-        v["force"] = self.vars["force"].get()
-        self.last_out = [project_dir(j, out_root) for j in jars]
-        jobs = [build_args(dict(v, jar=j, out=o)) for j, o in zip(jars, self.last_out)]
-        self.run(jobs, done=lambda ok: ok and messagebox.showinfo(
-            "j2a", ("Proyecto listo." if len(jobs) == 1 else "%d proyectos listos." % len(jobs))
-            + "\n\nAbre la carpeta en Android Studio (File > Open) y pulsa Run ▶."))
+        existing = [g for g in self.games.values() if os.path.isdir(g.out(root)) and os.listdir(g.out(root))]
+        replace = False
+        if existing:
+            replace = messagebox.askyesnocancel("j2a", "%s ya tiene%s proyecto en su carpeta.\n\n"
+                                                "Sí: reemplazarlo (se pierden los cambios que le hiciste)\n"
+                                                "No: dejarlo como está y crear solo los demás" % (
+                                                    ", ".join(g.name or g.auto_name for g in existing),
+                                                    "n" if len(existing) > 1 else ""))
+            if replace is None:
+                return
+        jobs = []
+        for g in self.games.values():
+            if g in existing and not replace:
+                g.status = "Ya existe"
+                continue
+            g.status = "En cola"
+            jobs.append((g.jar, build_args(dict(v, jar=g.jar, out=g.out(root), name=g.name, package=g.package,
+                                                force=g in existing))))
+        self.refresh()
+        if not jobs:
+            self.status.set("Nada que crear: todos ya tienen proyecto.")
+        self.run(jobs)
 
     def open_out(self):
-        outs = [o for o in getattr(self, "last_out", []) if os.path.isdir(o)]
-        p = outs[0] if len(outs) == 1 else (self.value("out") or (os.path.dirname(outs[0]) if outs else ""))
+        sel = self.tree.selection() or tuple(self.games)
+        outs = [self.games[j].out(self.out_root()) for j in sel if j in self.games]
+        p = next((o for o in outs if os.path.isdir(o)), None) or self.out_root()
         if not p or not os.path.isdir(p):
-            messagebox.showinfo("j2a", "La carpeta todavía no existe: genera el port primero.")
+            messagebox.showinfo("j2a", "Todavía no hay carpeta: crea el port primero.")
             return
         if sys.platform.startswith("win"):
             os.startfile(p)  # noqa: S606 - user-chosen local folder
         else:
             subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", p])
 
-    def run(self, jobs, done=None):
-        """jobs: one argv list, or several (one per game) run one after another."""
+    def run(self, jobs):
+        """jobs: [(jar or None, argv)], run one after another; one bad game never stops the others."""
         if self.busy or not jobs:
             return
-        if isinstance(jobs[0], str):
-            jobs = [jobs]
+        jobs = [j if isinstance(j, tuple) else (None, j) for j in jobs]
         self.busy = True
-        for b in self.buttons:
-            b.state(["disabled"])
+        self.go.state(["disabled"])
 
         def work():
-            failed = []
-            for argv in jobs:
+            failed = 0
+            for i, (jar, argv) in enumerate(jobs, 1):
+                if jar:
+                    self.q.put(("status", jar, "Creando…"))
+                    self.q.put(("line", "Creando %d de %d: %s" % (i, len(jobs), self.games[jar].name
+                                                                   or self.games[jar].auto_name)))
                 self.q.put("\n$ j2a " + " ".join(argv) + "\n")
-                if not run_one(argv, self.q):
-                    failed.append(os.path.basename(argv[1]) if len(argv) > 1 else argv[0])
-            if len(jobs) > 1:  # one bad game never stops the others
-                self.q.put("\n%d de %d bien%s\n" % (len(jobs) - len(failed), len(jobs),
-                                                      ("; fallaron: " + ", ".join(failed)) if failed else ""))
-            self.q.put(("done", not failed, done))
+                ok = run_one(argv, self.q)
+                failed += not ok
+                if jar:
+                    self.q.put(("status", jar, "Listo" if ok else "Falló"))
+            n = len(jobs)
+            self.q.put(("done", failed, ("Listo: %d port%s creado%s." % (n, "s" * (n > 1), "s" * (n > 1))
+                                         if not failed else "%d de %d fallaron: mira los detalles." % (failed, n))
+                        if jobs[0][0] else ""))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -297,16 +532,22 @@ class App(BaseTk):
         try:
             while True:
                 item = self.q.get_nowait()
-                if isinstance(item, tuple):
-                    _, ok, done = item
-                    self.busy = False
-                    for b in self.buttons:
-                        b.state(["!disabled"])
-                    self.write("\n" + ("✔ Terminado" if ok else "✘ Falló (mira el mensaje de arriba)") + "\n")
-                    if done:
-                        done(ok)
-                else:
+                if not isinstance(item, tuple):
                     self.write(item)
+                elif item[0] == "status":
+                    g = self.games.get(item[1])
+                    if g:
+                        g.status = item[2]
+                        self.refresh()
+                elif item[0] == "line":
+                    self.status.set(item[1])
+                else:  # done
+                    _, failed, text = item
+                    self.busy = False
+                    self.go.state(["!disabled"])
+                    self.status.set(text)
+                    if failed or not text:
+                        self.toggle_log(True)
         except queue.Empty:
             pass
         self.after(100, self.poll)
