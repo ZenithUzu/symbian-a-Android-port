@@ -28,10 +28,16 @@ python tool/j2a.py doctor      # comprueba Java, SDK y descompiladores
 
 Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`). En Windows, si no abre o sale un error de "Python Launcher", usa **`j2a-gui.bat`**: muestra el error en vez de cerrarse.
 
-1. **Juego (.jar) → Elegir…** y selecciona el juego.
-2. Ajusta resolución, rotación, shader, FPS y teclado si quieres. Lo automático suele bastar.
-3. **Generar port**.
-4. **Abrir carpeta** y ábrela en Android Studio (File → Open) → Run ▶.
+1. **Juegos (.jar) → Elegir…** (con Ctrl o Mayús eliges varios) o **arrastra** uno o varios `.jar`
+   a la ventana. También puedes soltarlos sobre `j2a-gui.bat` y la ventana se abre con ellos cargados.
+2. **Guardar en**: vacío = cada proyecto queda junto a su `.jar` (`Juego-android`); o elige una carpeta
+   para todos.
+3. Ajusta resolución, rotación, shader, FPS y teclado si quieres (se aplican a todos). Lo automático suele bastar.
+4. **Generar port**: se generan uno tras otro; si uno falla, los demás siguen y al final ves el resumen.
+5. **Abrir carpeta** y ábrela en Android Studio (File → Open) → Run ▶.
+
+Arrastrar dentro de la ventana usa el paquete `tkinterdnd2`: `j2a-gui.bat` lo instala solo la primera vez
+(o `python -m pip install tkinterdnd2`). Sin él, todo lo demás funciona igual.
 
 La ventana usa los mismos comandos de abajo, así que el resultado es idéntico.
 
