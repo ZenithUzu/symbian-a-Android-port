@@ -70,6 +70,7 @@ class ClassFile:
                            for k in range(icount)]
         pos += 2 * icount
         self.code_ranges = []  # (abs_start, length) of each method's bytecode
+        self.members = []      # (name, descriptor, access) of every field and method
         pos = self._members(pos, False)   # fields
         pos = self._members(pos, True)    # methods
 
@@ -79,7 +80,9 @@ class ClassFile:
         n = struct.unpack(">H", d[pos:pos + 2])[0]
         pos += 2
         for _ in range(n):
-            pos += 6  # access, name, descriptor
+            acc, name_i, desc_i = struct.unpack(">HHH", d[pos:pos + 6])
+            self.members.append((self.utf8(name_i), self.utf8(desc_i), acc))
+            pos += 6
             acount = struct.unpack(">H", d[pos:pos + 2])[0]
             pos += 2
             for _ in range(acount):
@@ -228,8 +231,8 @@ def remap_utf8(data, pattern, repl):
             except UnicodeDecodeError:  # modified UTF-8 oddities: never touch them
                 text = None
             new = pattern.sub(repl, text) if text is not None else None
-            if new is not None and new != text:
-                b = new.encode("utf-8")
+            b = new.encode("utf-8") if new is not None and new != text else None
+            if b is not None and len(b) <= 0xFFFF:  # a huge string that would overflow stays as is
                 out += b"\x01" + struct.pack(">H", len(b)) + b
                 changed = True
             else:

@@ -19,7 +19,10 @@ DECOMPILERS = {
 
 FAILURE_MARKERS = ("$VF: Couldn't be decompiled", "$FF: Couldn't be decompiled", "<undefinedtype>",
                    "<unrepresentable>", "<unknown>", "This method has failed to decompile",
-                   "Exception decompiling", "$VF: Unable to")
+                   "Exception decompiling", "$VF: Unable to",
+                   # CFR: a failed method becomes 'throw new IllegalStateException("Decompilation failed")',
+                   # which compiles and only breaks while playing
+                   "Decompilation failed", "Unable to fully structure code", "possible behaviour change")
 
 
 def log(msg):
@@ -177,14 +180,43 @@ def patch_jar(src_jar, out_jar, exclude=(), remap=None):
     return stats
 
 
+_WIN_RESERVED = re.compile(r"(con|prn|aux|nul|com\d|lpt\d)(\..*)?$", re.I)
+
+
+def case_clashes(names):
+    """Names ('a/b/C' form) whose file would overwrite or merge with another one on Windows/macOS,
+    whose file systems ignore case: 'a' vs 'A', packages 'a/' vs 'A/', or reserved names like 'aux'."""
+    spellings = {}
+    for n in names:
+        parts = n.split("/")
+        for i in range(1, len(parts) + 1):
+            p = "/".join(parts[:i])
+            spellings.setdefault(p.lower(), set()).add(p)
+    bad = {k for k, v in spellings.items() if len(v) > 1}
+    out = set()
+    for n in names:
+        parts = n.split("/")
+        if any("/".join(parts[:i]).lower() in bad for i in range(1, len(parts) + 1)) \
+                or any(_WIN_RESERVED.match(x) for x in parts):
+            out.add(n)
+    return out
+
+
+assert case_clashes(["a", "A", "b", "x/c", "X/d", "y/e", "aux", "p/Nul.png"]) == {"a", "A", "x/c", "X/d", "aux", "p/Nul.png"}
+
+
 def extract_resources(src_jar, out_dir):
     """Copies non-class entries (images, sounds, levels...) and returns their names."""
     names = []
     with zipfile.ZipFile(src_jar) as z:
-        for info in z.infolist():
+        entries = [i for i in z.infolist()
+                   if not (i.is_dir() or i.filename.endswith(".class") or i.filename.upper().startswith("META-INF/"))]
+        clash = case_clashes([i.filename for i in entries])
+        if clash:  # shortcut: only warned, they'd need a resources jar to survive a Windows checkout
+            log("  Aviso: estos recursos solo se distinguen por mayúsculas y en Windows se pisan entre sí: "
+                + ", ".join(sorted(clash)[:8]))
+        for info in entries:
             n = info.filename
-            if info.is_dir() or n.endswith(".class") or n.upper().startswith("META-INF/"):
-                continue
             safe = os.path.normpath(n)
             if safe.startswith("..") or os.path.isabs(safe):
                 continue
@@ -271,19 +303,21 @@ def decompile(jar, out_dir, engine="vineflower", libs=(), only=None):
         tmp = tempfile.mkdtemp(prefix="j2a-only-")
         libs.append(jar)
         jar = _subset_jar(jar, only, os.path.join(tmp, "subset.jar"))
+    # UTF-8 .java files on any Java/Windows locale (CFR otherwise writes cp1252 and loses game text)
+    java = [java, "-Dfile.encoding=UTF-8"]
     if engine == "vineflower":
-        cmd = [java, "-jar", tool, "--folder", "--silent", "--variable-renaming=jad",
-               "--decompile-generics=false", "--log-level=error", "--include-runtime=current"]
+        cmd = java + ["-jar", tool, "--folder", "--silent", "--variable-renaming=jad",
+                      "--decompile-generics=false", "--log-level=error", "--include-runtime=current"]
         for lib in libs:
             cmd.append("-e=" + lib)
         cmd += [jar, out_dir]
-    else:
-        cmd = [java, "-jar", tool, jar, "--outputdir", out_dir, "--silent", "true", "--comments", "false"]
+    else:  # keep CFR's comments: they are how failed methods are detected
+        cmd = java + ["-jar", tool, jar, "--outputdir", out_dir, "--silent", "true", "--outputencoding", "UTF-8"]
         if libs:
             cmd += ["--extraclasspath", os.pathsep.join(libs)]
     log("Descompilando con %s ..." % engine)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     finally:
         if tmp:
             shutil.rmtree(tmp, ignore_errors=True)
@@ -322,6 +356,21 @@ def failed_classes(src_dir):
 
 # ---------------------------------------------------------------- fixups
 
+# identifiers that became keywords after Java 1.4 (e.g. a variable called 'enum'); string and char
+# literals are matched first and kept, so game text is never changed. A renamed field or method is
+# caught later by lost_members() and goes back to bytecode.
+_KEYWORD_IDENT = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\''
+                            r'|(?<![\w.])\b(enum|assert)\b(?=\s*(?:=|;|\)|,|\.|\[))')
+
+
+def _fix_keywords(text):
+    return _KEYWORD_IDENT.sub(lambda m: m.group(1) + "_" if m.group(1) else m.group(0), text)
+
+
+assert _fix_keywords('int enum = 1; s = "enum = x"; c = \'"\'; f(enum);') == \
+    'int enum_ = 1; s = "enum = x"; c = \'"\'; f(enum_);'
+
+
 def fix_sources(src_dir):
     """Small textual fixes for code written for Java 1.1-1.4 compilers."""
     changed = 0
@@ -329,9 +378,7 @@ def fix_sources(src_dir):
         with open(p, encoding="utf-8", errors="replace") as f:
             text = f.read()
         orig = text
-        # identifiers that became keywords after Java 1.4 (e.g. a variable called 'enum')
-        for kw in ("enum", "assert"):
-            text = re.sub(r"(?<![\w.\"])\b%s\b(?=\s*(=|;|\)|,|\.|\[))" % kw, kw + "_", text)
+        text = _fix_keywords(text)
         if text != orig:
             changed += 1
             with open(p, "w", encoding="utf-8") as f:
@@ -339,8 +386,9 @@ def fix_sources(src_dir):
     return changed
 
 
-def compile_check(src_dir, android_jar, classpath):
-    """Compiles the sources; returns the set of top-level classes with errors (or None if no javac)."""
+def compile_check(src_dir, android_jar, classpath, out_dir=None):
+    """Compiles the sources; returns the set of top-level classes with errors (or None if no javac).
+    out_dir: where to keep the compiled classes (default: thrown away)."""
     javac = paths.java_bin("javac")
     if not javac or not android_jar:
         return None
@@ -352,10 +400,11 @@ def compile_check(src_dir, android_jar, classpath):
         argfile = os.path.join(tmp, "sources.txt")
         with open(argfile, "w", encoding="utf-8") as f:
             f.write("\n".join('"%s"' % p.replace("\\", "/") for p in files.values()))
-        cmd = [javac, "-nowarn", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-Xmaxerrs", "100000",
-               "-bootclasspath", android_jar, "-cp", os.pathsep.join(classpath),
-               "-d", os.path.join(tmp, "out"), "@" + argfile]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        # English messages: the "file.java:12: error" lines are parsed (German/Japanese JDKs translate them)
+        cmd = [javac, "-J-Duser.language=en", "-nowarn", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+               "-Xmaxerrs", "100000", "-bootclasspath", android_jar, "-cp", os.pathsep.join(classpath),
+               "-d", out_dir or os.path.join(tmp, "out"), "@" + argfile]
+        r = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
         if r.returncode == 0:
             return set()
         bad = set()
@@ -372,3 +421,33 @@ def compile_check(src_dir, android_jar, classpath):
         return bad
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+_ANON = re.compile(r"\$\d")  # anonymous/local classes: private to their file, numbering may differ
+
+
+def lost_members(cls_dir, jar, tops):
+    """Top-level classes whose recompiled .class lacks a field, method or named inner class the
+    original had: the decompiler dropped or renamed it (e.g. obfuscators flag real methods as
+    synthetic and Vineflower hides those). Bytecode classes still calling it would crash in game."""
+    bad = set()
+    with zipfile.ZipFile(jar) as z:
+        for n in z.namelist():
+            internal = n[:-6]
+            top = internal.split("$")[0]
+            if not n.endswith(".class") or top not in tops or _ANON.search(internal):
+                continue
+            p = os.path.join(cls_dir, n)
+            if not os.path.isfile(p):
+                bad.add(top)
+                continue
+            with open(p, "rb") as f:
+                have = {(m[0], m[1]) for m in classfile.ClassFile(f.read()).members}
+            for name, desc, acc in classfile.ClassFile(z.read(n)).members:
+                # javac's own helpers (access$000, this$0, class$...) and static init may differ
+                if "$" in name or name == "<clinit>" or (name == "<init>" and acc & 0x1000):
+                    continue
+                if (name, desc) not in have:
+                    bad.add(top)
+                    break
+    return bad

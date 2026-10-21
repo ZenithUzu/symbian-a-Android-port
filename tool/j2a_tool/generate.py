@@ -356,6 +356,14 @@ def port(args):
             log("  %d clase(s) no se descompilaron limpias: se quedan en bytecode (%s)" % (
                 len(failed), ", ".join(sorted(failed)[:8])))
         source_classes -= failed
+        with zipfile.ZipFile(patched_all) as z:
+            clash = {c.lower() for c in decompile.case_clashes(
+                set(n[:-6].split("$")[0] for n in z.namelist() if n.endswith(".class")))}
+        clash = {c for c in source_classes if c.lower() in clash}
+        if clash:  # their .java files overwrite each other on Windows/macOS: keep the original bytecode
+            log("  %d clase(s) solo se distinguen por mayúsculas: se quedan en bytecode (%s)" % (
+                len(clash), ", ".join(sorted(clash)[:8])))
+            source_classes -= clash
         if n_fixed:
             log("  Ajustes automáticos de sintaxis en %d archivo(s)" % n_fixed)
         if args.no_verify:
@@ -370,13 +378,20 @@ def port(args):
                     dst = os.path.join(check_dir, c.replace("/", os.sep) + ".java")
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     shutil.copyfile(files[c], dst)
-                bad = decompile.compile_check(check_dir, android_jar, [rt_jar, patched_all]) & source_classes
+                out_cls = os.path.join(work, "check-out")
+                shutil.rmtree(out_cls, ignore_errors=True)
+                bad = decompile.compile_check(check_dir, android_jar, [rt_jar, patched_all], out_cls) & source_classes
+                why = "errores de compilación"
+                if not bad:  # compiles: now make sure nothing the original had was lost on the way
+                    bad = decompile.lost_members(out_cls, patched_all, source_classes)
+                    why = "métodos o campos perdidos al descompilar"
                 shutil.rmtree(check_dir, ignore_errors=True)
+                shutil.rmtree(out_cls, ignore_errors=True)
                 if not bad:
                     log("  Verificación: las %d clases en código fuente compilan" % len(source_classes))
                     break
-                log("  Verificación %d: %d clase(s) con errores de compilación -> bytecode (%s)" % (
-                    attempt, len(bad), ", ".join(sorted(bad)[:8])))
+                log("  Verificación %d: %d clase(s) con %s -> bytecode (%s)" % (
+                    attempt, len(bad), why, ", ".join(sorted(bad)[:8])))
                 source_classes -= bad
         if args.keep_bytecode:
             keep = set(c.strip().replace(".", "/") for c in args.keep_bytecode.split(",") if c.strip())
@@ -452,7 +467,7 @@ def port(args):
     args.keypad = args.keypad or hint_mode or "full"
     write_props(os.path.join(assets, "port.properties"), _port_items(midlet_class, sw, sh, args),
                 "Configuración del port (editable). El jugador puede cambiar algunas opciones\n"
-                "desde el menú del port (botón ☰ del teclado virtual).")
+                "desde el menú del port (gesto o botón Atrás).")
     n_shader_sets = copy_shaders(args.shaders, os.path.join(app, "src", "main", "assets", "shaders"))
     if n_shader_sets:
         log("  Shaders externos: %d archivo(s) .ini copiados (revisa su licencia: los de PPSSPP suelen ser GPL)"
