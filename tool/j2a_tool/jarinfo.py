@@ -216,9 +216,12 @@ class MidletSuite:
                 continue  # each pair counted once (portrait form); orientation decided elsewhere
             if w == h:
                 continue  # 128 / 208 alone are too common (bit masks...) to mean anything
+            if min(w, h) < 128:
+                continue  # 65/80/96/101 are also char codes ('A', 'P', 'e') in string decoders
             n = sum(1 for c in consts if w in c and h in c)
-            # in a big code base two numbers meet by chance; demand a share of the classes
-            if n >= max(1, len(consts) // 20) and (best is None or n > best[2]):
+            # in a big code base two numbers meet by chance; demand a share of the classes.
+            # Ties go to the bigger screen: too big is cropped by the APK's auto-fit, too small breaks the game
+            if n >= max(1, len(consts) // 20) and (best is None or (n, w * h) > (best[2], best[0] * best[1])):
                 best = (w, h, n)
         return best
 
