@@ -25,6 +25,28 @@ public final class ResourceShim {
         return open(path, name);
     }
 
+    /** Reads a stream fully (and closes it). */
+    public static byte[] readAll(InputStream in) throws java.io.IOException {
+        try {
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            byte[] b = new byte[8192];
+            int n;
+            while ((n = in.read(b)) > 0) bo.write(b, 0, n);
+            return bo.toByteArray();
+        } finally {
+            in.close();
+        }
+    }
+
+    public static void copyFile(java.io.File src, java.io.File dst) throws java.io.IOException {
+        java.io.OutputStream out = new java.io.FileOutputStream(dst);
+        try {
+            out.write(readAll(new java.io.FileInputStream(src)));
+        } finally {
+            out.close();
+        }
+    }
+
     /** Opens a JAR resource by absolute path (with or without leading '/'). */
     public static InputStream open(String path) {
         if (path == null) return null;

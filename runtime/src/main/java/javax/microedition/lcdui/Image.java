@@ -112,6 +112,26 @@ public class Image {
         bitmap.getPixels(rgbData, offset, scanlength, x, y, width, height);
     }
 
+    // ---- helpers used by vendor APIs (Siemens, Vodafone, MascotCapsule...) ----
+
+    /** Mutable image filled with an ARGB color (0 = transparent). */
+    public static Image createImage(int width, int height, int argb) {
+        return j2aCreateMutable(width, height, argb);
+    }
+
+    public Bitmap getBitmap() { return bitmap; }
+
+    private Graphics single;
+
+    /** One shared Graphics for this image (vendor APIs draw through it repeatedly). */
+    public Graphics getSingleGraphics() {
+        if (single == null) single = getGraphics();
+        return single;
+    }
+
+    /** Siemens 1-bit images: transparency is already in the bitmap here. */
+    public void setBlackWhiteAlpha(boolean blackWhiteAlpha) {}
+
     /** Screen-sized buffer: black instead of MIDP's white, so areas a game never draws look like bars. */
     public static Image j2aCreateScreen(int w, int h) {
         return j2aCreateMutable(w, h, 0xFF000000);

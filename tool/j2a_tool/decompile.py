@@ -17,9 +17,6 @@ DECOMPILERS = {
     "cfr": ("https://github.com/leibnitz27/cfr/releases/download/0.152/cfr-0.152.jar", "cfr-0.152.jar"),
 }
 
-# Packages the runtime provides: copies bundled inside a game JAR are dropped.
-RUNTIME_PACKAGES = ("javax/microedition/", "com/nokia/mid/", "com/samsung/util/", "j2a/")
-
 FAILURE_MARKERS = ("$VF: Couldn't be decompiled", "$FF: Couldn't be decompiled", "<undefinedtype>",
                    "<unrepresentable>", "<unknown>", "This method has failed to decompile",
                    "Exception decompiling", "$VF: Unable to")
@@ -54,49 +51,93 @@ def require_java(tool="java"):
 
 # ---------------------------------------------------------------- patching
 
-# J2ME API packages the engine provides -> sub-packages of the app's own engine package.
-NATIVE_PACKAGES = [
-    ("javax/microedition/lcdui/", "lcdui/"), ("javax/microedition/midlet/", "midlet/"),
-    ("javax/microedition/rms/", "rms/"), ("javax/microedition/media/", "media/"),
-    ("javax/microedition/io/", "io/"), ("javax/microedition/m3g/", "m3g/"),
-    ("com/nokia/mid/", "nokia/"), ("com/samsung/util/", "samsung/"),
-    ("j2a/core/", "core/"),
+# Where each API root goes inside the app's own engine package (<app>.engine.*).
+ENGINE_ROOTS = [
+    ("javax/microedition", ""), ("j2a/core", "core"), ("com/nokia/mid", "nokia"),
+    ("com/samsung", "samsung"), ("com/siemens/mp", "siemens"), ("com/motorola", "motorola"),
+    ("com/mot", "mot"), ("com/sonyericsson", "sonyericsson"), ("com/mascotcapsule", "mascotcapsule"),
+    ("com/vodafone", "vodafone"), ("com/jblend", "jblend"), ("com/j_phone", "jphone"),
+    ("com/kddi", "kddi"), ("com/mexa", "mexa"), ("com/sprintpcs", "sprintpcs"), ("com/sun/midp", "sunmidp"),
+    ("javax/bluetooth", "bluetooth"), ("javax/obex", "obex"), ("javax/wireless", "wireless"),
+    ("org/microemu", "microemu"), ("ru/woesss/j2me/micro3d", "micro3d"),
 ]
 
+_ENGINE_CLASSES = None
 
-def native_remapper(engine_pkg):
-    """(regex, repl) renaming the J2ME API to <engine_pkg>.* in slash and dot form.
 
-    Matches whole package names ('package javax.microedition.lcdui;', 'javax/microedition/lcdui/X',
-    'javax.microedition.lcdui.game.Sprite'). javax.microedition.io.file, khronos, m3g... are
-    not implemented by the engine and are left alone."""
+def engine_classes():
+    """Internal names of every top-level class the engine provides (from its sources)."""
+    global _ENGINE_CLASSES
+    if _ENGINE_CLASSES is None:
+        out = set()
+        for root in paths.java_source_roots():
+            for d, _, fs in os.walk(root):
+                for f in fs:
+                    if f.endswith(".java"):
+                        out.add(os.path.relpath(os.path.join(d, f), root)[:-5].replace(os.sep, "/"))
+        _ENGINE_CLASSES = out
+    return _ENGINE_CLASSES
+
+
+def engine_package(pkg, engine_pkg):
+    """'javax/microedition/lcdui' -> 'com/x/y/engine/lcdui' (slash form)."""
+    base = engine_pkg.replace(".", "/")
+    for root, new in ENGINE_ROOTS:
+        if pkg == root or pkg.startswith(root + "/"):
+            rest = pkg[len(root):].lstrip("/")
+            return "/".join(x for x in (base, new, rest) if x)
+    raise ValueError("engine package outside ENGINE_ROOTS: " + pkg)
+
+
+def _compile(table):
     import re as _re
-    base = engine_pkg.replace(".", "/") + "/"
-    table = {}
-    for old, new in NATIVE_PACKAGES:
-        old, new = old.rstrip("/"), (base + new).rstrip("/")
-        table[old] = new
-        table[old.replace("/", ".")] = new.replace("/", ".")
+    for k in list(table):
+        table[k.replace("/", ".")] = table[k].replace("/", ".")
     keys = sorted(table, key=len, reverse=True)
-    # start: not inside an identifier, or right after the 'L' of a descriptor ("(ILjavax/...;)V")
-    start = "(?:(?<![\\w$])|(?<=L))"
-    pattern = _re.compile(start + "(?:%s)(?![\\w$])(?![./]file\\b)" % "|".join(_re.escape(k) for k in keys))
+    # start: not inside an identifier, or right after the 'L' of a descriptor ("(ILjavax/...;)V");
+    # end: not followed by more identifier ('$Inner' is fine: inner classes follow their outer class)
+    pattern = _re.compile("(?:(?<![\\w$])|(?<=L))(?:%s)(?![\\w])" % "|".join(_re.escape(k) for k in keys))
     return pattern, lambda m: table[m.group(0)]
 
 
-# self-check of the remapper (cheap, runs on import)
-_p, _r = native_remapper("a.b.engine")
-assert _p.sub(_r, "package javax.microedition.lcdui;") == "package a.b.engine.lcdui;"
+def native_remapper(engine_pkg, classes=None):
+    """Renames exactly the classes the engine provides (in game bytecode and decompiled source).
+
+    Class by class, never by package prefix: a game's own classes under e.g. com.nokia.mid.appl
+    (Nokia's own games) must keep their names."""
+    table = {}
+    for c in (classes if classes is not None else engine_classes()):
+        pkg, _, simple = c.rpartition("/")
+        table[c] = engine_package(pkg, engine_pkg) + "/" + simple
+    return _compile(table)
+
+
+def package_remapper(engine_pkg, classes=None):
+    """Renames whole engine packages (for the engine's own sources: package/import lines, paths)."""
+    pkgs = set(c.rpartition("/")[0] for c in (classes if classes is not None else engine_classes()))
+    return _compile({p: engine_package(p, engine_pkg) for p in pkgs})
+
+
+# self-check of the remappers (cheap, runs on import)
+_cls = {"javax/microedition/lcdui/Canvas", "javax/microedition/lcdui/game/Sprite", "j2a/core/Host",
+        "com/nokia/mid/ui/DirectGraphics", "com/nokia/mid/ui/FullCanvas", "javax/microedition/lcdui/Image",
+        "javax/microedition/lcdui/Graphics", "javax/microedition/io/file/FileConnection"}
+_p, _r = native_remapper("a.b.engine", _cls)
 assert _p.sub(_r, "Ljavax/microedition/lcdui/game/Sprite;") == "La/b/engine/lcdui/game/Sprite;"
-assert _p.sub(_r, "javax.microedition.io.file.FileConnection") == "javax.microedition.io.file.FileConnection"
-assert _p.sub(_r, "javax.microedition.khronos.egl.EGL10") == "javax.microedition.khronos.egl.EGL10"
-assert _p.sub(_r, "import j2a.core.Host;") == "import a.b.engine.core.Host;"
-assert _p.sub(_r, "(Ljavax/microedition/lcdui/Graphics;II)V") == "(La/b/engine/lcdui/Graphics;II)V"
+assert _p.sub(_r, "(ILjavax/microedition/lcdui/Image;Z)V") == "(ILa/b/engine/lcdui/Image;Z)V"
 assert _p.sub(_r, "[Lcom/nokia/mid/ui/DirectGraphics;") == "[La/b/engine/nokia/ui/DirectGraphics;"
 assert _p.sub(_r, "com.nokia.mid.ui.FullCanvas") == "a.b.engine.nokia.ui.FullCanvas"
-assert _p.sub(_r, "xjavax.microedition.lcdui") == "xjavax.microedition.lcdui"
-assert _p.sub(_r, "(ILjavax/microedition/lcdui/Image;Z)V") == "(ILa/b/engine/lcdui/Image;Z)V"
-del _p, _r
+assert _p.sub(_r, "import j2a.core.Host;") == "import a.b.engine.core.Host;"
+assert _p.sub(_r, "javax/microedition/lcdui/Canvas$1") == "a/b/engine/lcdui/Canvas$1"
+assert _p.sub(_r, "javax/microedition/lcdui/CanvasX") == "javax/microedition/lcdui/CanvasX"
+assert _p.sub(_r, "com/nokia/mid/appl/boun/BounceUI") == "com/nokia/mid/appl/boun/BounceUI"  # game class
+assert _p.sub(_r, "javax.microedition.khronos.egl.EGL10") == "javax.microedition.khronos.egl.EGL10"
+assert _p.sub(_r, "javax.microedition.io.file.FileConnection") == "a.b.engine.io.file.FileConnection"
+_p, _r = package_remapper("a.b.engine", _cls)
+assert _p.sub(_r, "package javax.microedition.lcdui.game;") == "package a.b.engine.lcdui.game;"
+assert _p.sub(_r, "import javax.microedition.lcdui.*;") == "import a.b.engine.lcdui.*;"
+assert _p.sub(_r, "javax/microedition/io/file/X.java") == "a/b/engine/io/file/X.java"
+del _p, _r, _cls
 
 
 def patch_jar(src_jar, out_jar, exclude=(), remap=None):
@@ -114,10 +155,10 @@ def patch_jar(src_jar, out_jar, exclude=(), remap=None):
                 continue
             seen.add(name)
             internal = name[:-6]
-            if internal.startswith(RUNTIME_PACKAGES):
+            top = internal.split("$")[0]
+            if top in engine_classes():  # the game bundled its own copy of an API class
                 stats["dropped_platform"].append(internal)
                 continue
-            top = internal.split("$")[0]
             if internal in exclude or top in exclude:
                 stats["excluded"].append(internal)
                 continue
@@ -183,8 +224,8 @@ def runtime_classes_jar(android_jar):
         with open(argfile, "w", encoding="utf-8") as f:
             f.write("\n".join('"%s"' % p.replace("\\", "/") for p in files))
         cls_dir = os.path.join(tmp, "classes")
-        cmd = [javac, "-nowarn", "-encoding", "UTF-8", "-source", "8", "-target", "8",
-               "-bootclasspath", android_jar, "-d", cls_dir, "@" + argfile]
+        cmd = [javac, "-nowarn", "-encoding", "UTF-8", "--release", "17",
+               "-cp", android_jar, "-d", cls_dir, "@" + argfile]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             log("Aviso: no pude compilar el runtime para la verificación:\n" + r.stderr[-2000:])

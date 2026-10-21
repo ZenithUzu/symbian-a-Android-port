@@ -307,6 +307,39 @@ public final class Host {
         g.present(frame);
     }
 
+    /** Draws an image straight onto the game screen and shows it (Canvas.flushBuffer). */
+    public static void drawToScreen(Image img, int x, int y) {
+        if (screenImage == null) return;
+        synchronized (screenImage) {
+            screenGraphics.j2aReset();
+            screenGraphics.drawImage(img, x, y, Graphics.TOP | Graphics.LEFT);
+        }
+        present(screenImage.j2aBitmap());
+    }
+
+    private static final java.util.Set<Integer> keysDown = new java.util.HashSet<Integer>();
+
+    /** Pressed keys as the Vodafone/J-Phone/KDDI key-state bitmask. */
+    public static int vodafoneKeyStates() {
+        int s = 0;
+        synchronized (keysDown) {
+            for (int k : keysDown) {
+                if (k >= Keys.NUM0 && k <= Keys.NUM9) s |= 1 << (k - Keys.NUM0);
+                else if (k == Keys.STAR) s |= 1 << 10;
+                else if (k == Keys.POUND) s |= 1 << 11;
+                else if (k == Keys.UP) s |= 1 << 12;
+                else if (k == Keys.LEFT) s |= 1 << 13;
+                else if (k == Keys.RIGHT) s |= 1 << 14;
+                else if (k == Keys.DOWN) s |= 1 << 15;
+                else if (k == Keys.FIRE) s |= 1 << 16;
+                else if (k == Keys.SOFT_LEFT) s |= 1 << 17;
+                else if (k == Keys.SOFT_RIGHT) s |= 1 << 18;
+                else if (k == Keys.CLEAR) s |= 1 << 19;
+            }
+        }
+        return s;
+    }
+
     static void relayout() {
         final ScreenView v = view;
         if (v != null) v.post(new Runnable() { public void run() { v.relayout(); } });
@@ -321,6 +354,10 @@ public final class Host {
 
     /** type: 0 = pressed, 1 = released, 2 = repeated */
     static void key(final int type, final int keyCode) {
+        synchronized (keysDown) {
+            if (type == 0) keysDown.add(keyCode);
+            else if (type == 1) keysDown.remove(keyCode);
+        }
         final Displayable d = current;
         if (d instanceof Canvas) {
             final Canvas c = (Canvas) d;
@@ -413,117 +450,102 @@ public final class Host {
         });
     }
 
+    /** Port menu: opened with Android's back gesture/button (or Menu/Escape). */
     static void showPortMenu() {
-        runOnUi(new Runnable() {
-            public void run() {
-                final java.util.List<Shaders.Def> shaders = Shaders.all(activity);
-                String shaderName = cfg.shader;
-                for (Shaders.Def d : shaders) if (d.id.equals(cfg.shader)) shaderName = d.label;
-                final String[] items = {
-                        "Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight,
-                        "Rotación: " + (cfg.orientation.length() == 0 ? "la del juego" : cfg.orientation),
-                        "Pantalla: " + ("wide".equals(cfg.scaleMode) ? "16:9" : "stretch".equals(cfg.scaleMode)
-                                ? "completa (estirar)" : "integer".equals(cfg.scaleMode) ? "pixel perfect" : "proporción original"),
-                        "Shader: " + shaderName,
-                        "Modo de FPS: " + cfg.fpsMode,
-                        "Límite de FPS: " + (cfg.fpsLimit == 0 ? "sin límite" : String.valueOf(cfg.fpsLimit)),
-                        "Mostrar FPS: " + (cfg.showFps ? "sí" : "no"),
-                        "Teclado virtual: " + ("none".equals(cfg.keypad) ? "oculto (solo táctil)" : "minimal".equals(cfg.keypad) ? "cruceta + OK" : "completo"),
-                        "Opacidad del teclado: " + (cfg.keypadAlpha * 100 / 255) + "%",
-                        "Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"),
-                        "Sonido: " + (cfg.sound ? "sí" : "no"),
-                        "Ajuste automático de resolución: " + (cfg.autoFit ? "sí" : "no"),
-                        "Girar imagen del juego: " + (cfg.rotate < 0 ? "automático (" + rotation() + "°)"
-                                : cfg.rotate == 0 ? "no" : cfg.rotate + "°"),
-                        "Captura de pantalla",
-                        "Restablecer opciones",
-                        "Salir del juego"
-                };
-                new AlertDialog.Builder(activity)
-                        .setTitle("Menú del port")
-                        .setItems(items, new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dlg, int which) {
-                                switch (which) {
-                                    case 0: pickResolution(); return;
-                                    case 1:
-                                        pick("Rotación", new String[]{"Automática", "Vertical", "Horizontal"},
-                                                new String[]{"auto", "portrait", "landscape"}, cfg.orientation,
-                                                new Runnable() {
-                                                    public void run() { applyOrientation(activity, cfg.orientation); }
-                                                }, "orientation");
-                                        return;
-                                    case 2:
-                                        pick("Pantalla", new String[]{"Proporción original del juego",
-                                                        "Pixel perfect (escalado entero)",
-                                                        "16:9 (usa casi toda la pantalla, deforma poco)",
-                                                        "Completa (estira hasta llenar todo)"},
-                                                new String[]{"fit", "integer", "wide", "stretch"}, cfg.scaleMode, null, "scale");
-                                        return;
-                                    case 3: {
-                                        String[] labels = new String[shaders.size()], ids = new String[shaders.size()];
-                                        for (int i = 0; i < ids.length; i++) {
-                                            labels[i] = shaders.get(i).label;
-                                            ids[i] = shaders.get(i).id;
-                                        }
-                                        pick("Shader", labels, ids, cfg.shader, null, "shader");
-                                        return;
-                                    }
-                                    case 4:
-                                        pick("Modo de FPS", new String[]{"Sincronizado con la pantalla (vsync)",
-                                                        "Dinámico (la pantalla se adapta a los FPS del juego)", "Sin límite"},
-                                                new String[]{"vsync", "dynamic", "unlimited"}, cfg.fpsMode, null, "fpsMode");
-                                        return;
-                                    case 5:
-                                        pick("Límite de FPS", new String[]{"Sin límite", "15", "20", "25", "30", "50", "60", "90", "120"},
-                                                new String[]{"0", "15", "20", "25", "30", "50", "60", "90", "120"},
-                                                String.valueOf(cfg.fpsLimit), null, "fps");
-                                        return;
-                                    case 6: cfg.showFps = !cfg.showFps; break;
-                                    case 7:
-                                        pick("Teclado virtual", new String[]{"Completo", "Cruceta + OK", "Oculto"},
-                                                new String[]{"full", "minimal", "none"}, cfg.keypad, null, "keypad");
-                                        return;
-                                    case 8:
-                                        pick("Opacidad del teclado", new String[]{"25%", "50%", "75%", "100%"},
-                                                new String[]{"64", "128", "192", "255"}, String.valueOf(cfg.keypadAlpha), null, "alpha");
-                                        return;
-                                    case 9: cfg.haptics = !cfg.haptics; break;
-                                    case 10:
-                                        cfg.sound = !cfg.sound;
-                                        if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
-                                        else javax.microedition.media.Manager.j2aPauseAll();
-                                        break;
-                                    case 11:
-                                        cfg.autoFit = !cfg.autoFit;
-                                        if (!cfg.autoFit) AutoFit.disable();
-                                        break;
-                                    case 12:
-                                        pick("Girar imagen del juego", new String[]{
-                                                        "Automático (detecta juegos que dibujan de lado)", "No girar",
-                                                        "90° (juegos que se juegan de lado, girando a la derecha)",
-                                                        "270° (juegos que se juegan de lado, girando a la izquierda)"},
-                                                new String[]{"-1", "0", "90", "270"}, String.valueOf(cfg.rotate),
-                                                new Runnable() { public void run() { applyOrientation(activity); } }, "rotate");
-                                        return;
-                                    case 13: Screenshot.save(activity, gl.snapshot()); return;
-                                    case 14:
-                                        Settings.reset(activity);
-                                        new AlertDialog.Builder(activity)
-                                                .setMessage("Opciones restablecidas. Se aplican al volver a abrir el juego.")
-                                                .setPositiveButton("Salir ahora", new DialogInterface.OnClickListener() {
-                                                    public void onClick(DialogInterface d, int x) { requestExit(); }
-                                                })
-                                                .setNegativeButton("Más tarde", null)
-                                                .show();
-                                        return;
-                                    case 15: requestExit(); return;
-                                }
-                                settingsChanged();
-                            }
-                        })
-                        .show();
-            }
+        runOnUi(() -> {
+            final java.util.List<String> labels = new java.util.ArrayList<>();
+            final java.util.List<Runnable> actions = new java.util.ArrayList<>();
+            java.util.function.BiConsumer<String, Runnable> item = (l, r) -> { labels.add(l); actions.add(r); };
+            final java.util.List<Shaders.Def> shaders = Shaders.all(activity);
+            String shaderName = cfg.shader;
+            for (Shaders.Def d : shaders) if (d.id.equals(cfg.shader)) shaderName = d.label;
+
+            item.accept("▶ Continuar", () -> {});
+            item.accept("Tecla izquierda del juego (menú / aceptar)", () -> tapKey(Keys.SOFT_LEFT));
+            item.accept("Tecla derecha del juego (atrás / pausa)", () -> tapKey(Keys.SOFT_RIGHT));
+            item.accept("Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight, Host::pickResolution);
+            item.accept("Rotación: " + (cfg.orientation.length() == 0 ? "la del juego" : cfg.orientation), () ->
+                    pick("Rotación", new String[]{"Automática", "Vertical", "Horizontal"},
+                            new String[]{"auto", "portrait", "landscape"}, cfg.orientation,
+                            () -> applyOrientation(activity, cfg.orientation), "orientation"));
+            item.accept("Girar imagen del juego: " + (cfg.rotate < 0 ? "automático (" + rotation() + "°)"
+                    : cfg.rotate == 0 ? "no" : cfg.rotate + "°"), () ->
+                    pick("Girar imagen del juego", new String[]{
+                                    "Automático (detecta juegos que dibujan de lado)", "No girar",
+                                    "90° (juegos que se juegan de lado, girando a la derecha)",
+                                    "270° (juegos que se juegan de lado, girando a la izquierda)"},
+                            new String[]{"-1", "0", "90", "270"}, String.valueOf(cfg.rotate),
+                            () -> applyOrientation(activity), "rotate"));
+            item.accept("Pantalla: " + ("wide".equals(cfg.scaleMode) ? "16:9" : "stretch".equals(cfg.scaleMode)
+                    ? "completa (estirar)" : "integer".equals(cfg.scaleMode) ? "pixel perfect" : "proporción original"), () ->
+                    pick("Pantalla", new String[]{"Proporción original del juego", "Pixel perfect (escalado entero)",
+                                    "16:9 (usa casi toda la pantalla, deforma poco)", "Completa (estira hasta llenar todo)"},
+                            new String[]{"fit", "integer", "wide", "stretch"}, cfg.scaleMode, null, "scale"));
+            item.accept("Shader: " + shaderName, () -> {
+                String[] ls = new String[shaders.size()], ids = new String[shaders.size()];
+                for (int i = 0; i < ids.length; i++) {
+                    ls[i] = shaders.get(i).label;
+                    ids[i] = shaders.get(i).id;
+                }
+                pick("Shader", ls, ids, cfg.shader, null, "shader");
+            });
+            item.accept("Modo de FPS: " + cfg.fpsMode, () ->
+                    pick("Modo de FPS", new String[]{"Sincronizado con la pantalla (vsync)",
+                                    "Dinámico (la pantalla se adapta a los FPS del juego)", "Sin límite"},
+                            new String[]{"vsync", "dynamic", "unlimited"}, cfg.fpsMode, null, "fpsMode"));
+            item.accept("Límite de FPS: " + (cfg.fpsLimit == 0 ? "sin límite" : String.valueOf(cfg.fpsLimit)), () ->
+                    pick("Límite de FPS", new String[]{"Sin límite", "15", "20", "25", "30", "50", "60", "90", "120"},
+                            new String[]{"0", "15", "20", "25", "30", "50", "60", "90", "120"},
+                            String.valueOf(cfg.fpsLimit), null, "fps"));
+            item.accept("Mostrar FPS: " + (cfg.showFps ? "sí" : "no"), () -> toggle(() -> cfg.showFps = !cfg.showFps));
+            item.accept("Teclado virtual: " + ("none".equals(cfg.keypad) ? "oculto (solo táctil)"
+                    : "minimal".equals(cfg.keypad) ? "cruceta + OK" : "completo"), () ->
+                    pick("Teclado virtual", new String[]{"Completo", "Cruceta + OK", "Oculto"},
+                            new String[]{"full", "minimal", "none"}, cfg.keypad, null, "keypad"));
+            item.accept("Opacidad del teclado: " + (cfg.keypadAlpha * 100 / 255) + "%", () ->
+                    pick("Opacidad del teclado", new String[]{"25%", "50%", "75%", "100%"},
+                            new String[]{"64", "128", "192", "255"}, String.valueOf(cfg.keypadAlpha), null, "alpha"));
+            item.accept("Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"), () -> toggle(() -> cfg.haptics = !cfg.haptics));
+            item.accept("Sonido: " + (cfg.sound ? "sí" : "no"), () -> toggle(() -> {
+                cfg.sound = !cfg.sound;
+                if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
+                else javax.microedition.media.Manager.j2aPauseAll();
+            }));
+            item.accept("Ajuste automático de resolución: " + (cfg.autoFit ? "sí" : "no"), () -> toggle(() -> {
+                cfg.autoFit = !cfg.autoFit;
+                if (!cfg.autoFit) AutoFit.disable();
+            }));
+            item.accept("Captura de pantalla", () -> Screenshot.save(activity, gl.snapshot()));
+            item.accept("Restablecer opciones", () -> {
+                Settings.reset(activity);
+                askRestart("Opciones restablecidas. Se aplican al volver a abrir el juego.");
+            });
+            item.accept("Salir del juego", Host::requestExit);
+
+            new AlertDialog.Builder(activity)
+                    .setTitle("Menú del port")
+                    .setItems(labels.toArray(new String[0]), (dlg, which) -> actions.get(which).run())
+                    .show();
         });
+    }
+
+    /** Presses and releases a game key (menu shortcuts for the soft keys). */
+    private static void tapKey(int code) {
+        key(0, code);
+        ui.postDelayed(() -> key(1, code), 80);
+    }
+
+    private static void toggle(Runnable change) {
+        change.run();
+        settingsChanged();
+    }
+
+    private static void askRestart(String message) {
+        new AlertDialog.Builder(activity)
+                .setMessage(message.replace("al volver a abrir el juego", "al reiniciar el juego"))
+                .setPositiveButton("Reiniciar ahora", (d, x) -> restartApp())
+                .setNegativeButton("Más tarde", null)
+                .show();
     }
 
     /** Touch games: ask once whether the on-screen keypad is wanted (the menu can change it later). */
@@ -534,7 +556,7 @@ public final class Host {
                 new AlertDialog.Builder(activity)
                         .setTitle("Controles")
                         .setMessage("Este juego se puede jugar tocando la pantalla. ¿Quieres además el teclado "
-                                + "virtual del teléfono? (Puedes cambiarlo luego en el menú ☰.)")
+                                + "virtual del teléfono? (Puedes cambiarlo luego en el menú: gesto o botón Atrás.)")
                         .setPositiveButton("Sí, mostrar teclado", new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface d, int w) {
                                 if ("none".equals(cfg.keypad)) cfg.keypad = "full";
@@ -585,39 +607,80 @@ public final class Host {
 
     /** Classic phone sizes plus a widescreen mode that matches this device's aspect ratio. */
     private static void pickResolution() {
-        final int[][] sizes = {{128, 160}, {176, 208}, {176, 220}, {240, 320}, {320, 240}, {240, 400},
-                {360, 640}, {640, 360}, {0, 0}};
-        String[] labels = new String[sizes.length];
-        for (int i = 0; i < sizes.length - 1; i++) labels[i] = sizes[i][0] + "x" + sizes[i][1];
-        labels[sizes.length - 1] = "Widescreen real (solo juegos que se adaptan a la pantalla; "
-                + "en los demás usa Pantalla > 16:9 para llenar la pantalla)";
+        final java.util.List<int[]> sizes = new java.util.ArrayList<>();
+        final java.util.List<String> labels = new java.util.ArrayList<>();
+        sizes.add(new int[]{cfg.baseWidth, cfg.baseHeight});
+        labels.add("Original del juego (" + cfg.baseWidth + "x" + cfg.baseHeight + ")");
+        for (int[] r : AutoFit.RESOLUTIONS) {
+            sizes.add(r);
+            labels.add(r[0] + "x" + r[1]);
+        }
+        android.util.DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+        int shortSide = Math.min(cfg.baseWidth, cfg.baseHeight);
+        float aspect = Math.max(dm.widthPixels, dm.heightPixels) / (float) Math.min(dm.widthPixels, dm.heightPixels);
+        boolean portrait = cfg.baseWidth <= cfg.baseHeight;
+        int longSide = Math.round(shortSide * aspect);
+        // widescreen from the game's own size (not the current one, so it never grows twice)
+        sizes.add(portrait ? new int[]{shortSide, longSide} : new int[]{longSide, shortSide});
+        labels.add("Widescreen real " + sizes.get(sizes.size() - 1)[0] + "x" + sizes.get(sizes.size() - 1)[1]
+                + " (solo juegos que se adaptan; si no, usa Pantalla > 16:9)");
+        sizes.add(null);
+        labels.add("Personalizada…");
         new AlertDialog.Builder(activity)
                 .setTitle("Resolución del juego")
-                .setItems(labels, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dlg, int which) {
-                        int w = sizes[which][0], h = sizes[which][1];
-                        if (w == 0) {
-                            android.util.DisplayMetrics dm = activity.getResources().getDisplayMetrics();
-                            float aspect = Math.max(dm.widthPixels, dm.heightPixels)
-                                    / (float) Math.min(dm.widthPixels, dm.heightPixels);
-                            // keep the short side, stretch the long side to the device aspect
-                            w = cfg.screenWidth;
-                            h = cfg.screenHeight;
-                            if (w <= h) h = Math.round(w * aspect);
-                            else w = Math.round(h * aspect);
-                        }
-                        Settings.saveScreen(activity, w, h);
-                        new AlertDialog.Builder(activity)
-                                .setMessage("La resolución " + w + "x" + h + " se aplica al reiniciar el juego. "
-                                        + "Solo funciona bien en juegos que se adaptan al tamaño de pantalla.")
-                                .setPositiveButton("Salir ahora", new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface d, int x) { requestExit(); }
-                                })
-                                .setNegativeButton("Más tarde", null)
-                                .show();
-                    }
+                .setItems(labels.toArray(new String[0]), (dlg, which) -> {
+                    int[] r = sizes.get(which);
+                    if (r == null) customResolution();
+                    else applyResolution(r[0], r[1]);
                 })
                 .show();
+    }
+
+    private static void customResolution() {
+        final android.widget.EditText e = new android.widget.EditText(activity);
+        e.setHint("ancho x alto, p. ej. 240x320");
+        e.setText(cfg.screenWidth + "x" + cfg.screenHeight);
+        new AlertDialog.Builder(activity)
+                .setTitle("Resolución personalizada")
+                .setView(e)
+                .setPositiveButton("Aplicar", (d, w) -> {
+                    String[] parts = e.getText().toString().toLowerCase().split("[x*, ]+");
+                    try {
+                        int rw = Integer.parseInt(parts[0].trim()), rh = Integer.parseInt(parts[1].trim());
+                        if (rw >= 64 && rh >= 64 && rw <= 2048 && rh <= 2048) {
+                            applyResolution(rw, rh);
+                            return;
+                        }
+                    } catch (RuntimeException ignored) {
+                        // fall through to the message
+                    }
+                    android.widget.Toast.makeText(activity, "Formato: 240x320 (entre 64 y 2048)",
+                            android.widget.Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private static void applyResolution(int w, int h) {
+        Settings.saveScreen(activity, w, h);
+        new AlertDialog.Builder(activity)
+                .setMessage("Resolución " + w + "x" + h + ". Hay que reiniciar el juego para aplicarla.")
+                .setPositiveButton("Reiniciar ahora", (d, x) -> restartApp())
+                .setNegativeButton("Más tarde", null)
+                .show();
+    }
+
+    /** Starts the app again in a fresh process (new resolution, reset options...). */
+    static void restartApp() {
+        android.content.Intent i = activity.getPackageManager().getLaunchIntentForPackage(activity.getPackageName());
+        if (i == null) {
+            requestExit();
+            return;
+        }
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        javax.microedition.media.Manager.j2aCloseAll();
+        activity.startActivity(i);
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     static void showFatal(final Throwable t) {

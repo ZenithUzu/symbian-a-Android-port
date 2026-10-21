@@ -132,7 +132,6 @@ def analyze(jar, jad=None):
         "screen_hints": suite.screen_hints(),
         "orientation_hint": suite.orientation_hint(),
         "uses_network": any(c.startswith("javax/microedition/io/") for c in used),
-        "uses_m3g": any(c.startswith("javax/microedition/m3g/") for c in used),
         "touch": bool(touch_classes),
         "keypad_hint": keypad_hint(suite.attrs, bool(touch_classes)),
     }
@@ -227,8 +226,13 @@ def print_report(r):
         p("Táctil: el juego pide solo cruceta en pantalla -> teclado mínimo")
     elif ask:
         p("Táctil: el juego acepta toques -> el APK preguntará la primera vez si mostrar el teclado")
-    if r["uses_m3g"]:
-        p("3D (M3G): se incluye el motor 3D nativo de Nokia (C). Android Studio necesitará el NDK")
+    natives = [n for n, prefixes in (("M3G", ("javax/microedition/m3g/",)),
+                                     ("MascotCapsule", ("com/mascotcapsule/", "com/jblend/graphics/j3d/",
+                                                        "com/motorola/graphics/j3d/", "com/motorola/iden/micro3d/",
+                                                        "com/vodafone/v10/graphics/j3d/")))
+               if any(c.startswith(prefixes) for c in r["supported"])]
+    if natives:
+        p("3D (%s): se incluye el motor 3D nativo (C/C++). Android Studio usará el NDK" % ", ".join(natives))
     if r["uses_network"]:
         p("Usa red (javax.microedition.io): se añadirá el permiso INTERNET")
     p("")

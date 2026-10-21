@@ -4,7 +4,8 @@
 
 Todas se configuran en `app/src/main/assets/j2a/port.properties` del proyecto generado
 (o desde código en `MainActivity.onConfigLoaded`). Algunas las puede cambiar el jugador
-desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
+desde el **menú del port**, que se abre con el **gesto o botón Atrás** de Android (o las teclas
+Menú/Escape). El menú también tiene accesos a las teclas izquierda y derecha del juego.
 
 | Mejora | Opción |
 |---|---|
@@ -22,9 +23,9 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 | Teclado virtual multitáctil: cruceta con diagonales (1/3/7/9), teclado numérico, soft keys con el nombre del comando | `keypad=full|minimal|none`, `keypad.alpha`, `keypad.haptics` |
 | Mandos y teclados físicos (cruceta, A/B/X/Y, L1/R1, Start/Select, WASD, números) | automático |
 | Pantalla táctil **multitáctil**: cada dedo llega al juego (`pointerPressed/Dragged/Released` + `com.nokia.pointer.number` como en la API multipunto de Nokia), así se puede mover y saltar a la vez en los controles táctiles del propio juego | automático |
-| Juegos táctiles: si el manifiesto dice `Nokia-MIDlet-On-Screen-Keypad: no` no se muestra teclado; si el juego acepta toques, la primera vez pregunta "¿mostrar teclado?". Sin teclado queda un ☰ pequeño para el menú | `keypad`, `keypad.ask`, menú |
+| Juegos táctiles: si el manifiesto dice `Nokia-MIDlet-On-Screen-Keypad: no` no se muestra teclado; si el juego acepta toques, la primera vez pregunta "¿mostrar teclado?". El menú se abre con el gesto Atrás | `keypad`, `keypad.ask`, menú |
 | Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido | `fps.limit=30` |
-| Resolución elegible en el APK, incluido **widescreen** con la proporción del móvil (requiere reiniciar; útil en juegos que leen `getWidth()/getHeight()`) | menú del port |
+| Resolución elegible en el APK: la original del juego, 24 resoluciones clásicas (96x65 … 800x480, vertical y horizontal), **widescreen real** con la proporción del móvil o **personalizada**; el juego se reinicia solo para aplicarla | menú del port |
 | Rotación elegible en el APK (automática/vertical/horizontal) | menú del port |
 | **Girar imagen 90°/270°** para juegos que se juegan de lado en un teléfono vertical: la app pasa a horizontal de verdad (barra de notificaciones y gestos correctos) y el táctil se gira también. **Automático por defecto**: si casi todo lo que dibuja el juego son imágenes giradas (`TRANS_ROT90/270`, `DirectGraphics.ROTATE_90/270`), gira solo y lo recuerda | `rotate=-1|0|90|270`, `--rotate`, menú |
 | Zonas que el juego nunca dibuja se ven negras (no blancas); el ajuste automático también recorta contenido centrado (p. ej. en la resolución widescreen de un juego que no se adapta) | automático |
@@ -61,11 +62,14 @@ desde el **menú del port** (botón ☰ del teclado virtual, o tecla Escape).
 
 ## Limitaciones conocidas
 
-- **3D**: M3G (JSR-184) **sí está soportado** con el motor 3D original de Nokia en C (`runtime-m3g/`,
-  licencia EPL 1.0, adaptado a Android por J2ME Loader). Solo se incluye en los ports de juegos 3D y
-  Android Studio lo compila con el NDK. MascotCapsule 3D todavía no.
-- **APIs de fabricante poco comunes** (Siemens, Motorola, Sony Ericsson específicas): no implementadas.
-- **SMS (JSR-120), Bluetooth (JSR-82), FileConnection (JSR-75), ubicación (JSR-179)**: no implementadas.
+- **3D**: M3G (JSR-184) con el motor original de Nokia en C (`runtime-m3g/`) y MascotCapsule V3
+  (también usado por las APIs 3D de JBlend, Vodafone y Motorola) con el renderizador de J2ME Loader
+  (`runtime-extra/cpp/micro3d`). Solo se compilan en los ports que los usan (NDK).
+- **APIs de fabricante y JSR extra** (`runtime-extra/`, de J2ME Loader): Siemens, Motorola, Sony
+  Ericsson, Samsung, Vodafone/J-Phone/KDDI/JBlend, Nokia (notificaciones, pagos, M3D), sensores
+  JSR-256 (acelerómetro), FileConnection/PIM JSR-75, ubicación JSR-179, SMS JSR-120, Bluetooth JSR-82,
+  AMMS JSR-234, controles MMAPI. Están todas incluidas en cada port para que ningún juego se cierre por
+  una clase que falta; algunas son implementaciones parciales (p. ej. las notificaciones se ignoran).
 - Tonos Nokia en formato *Smart Messaging* (`Sound.FORMAT_TONE` con bytes) se ignoran en silencio.
 - `CustomItem` dentro de formularios es básico.
 - El runtime está verificado en compilación contra la API de Android y el parche de bytecode contra

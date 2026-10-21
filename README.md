@@ -95,7 +95,7 @@ Todas las opciones de ejecución se pueden cambiar después en
 
 ### Opciones dentro del APK
 
-El jugador puede cambiar desde el **menú del port** (botón ☰ del teclado virtual, o Escape):
+El jugador abre el **menú del port** con el **gesto o botón Atrás** de Android (o Menú/Escape) y puede cambiar:
 resolución (128x160 … 640x360 y **widescreen** con la proporción del móvil), rotación
 (automática/vertical/horizontal), escalado (proporcional, entero, estirar), **shader**
 (nítido, suavizado, sharp bilinear, scanlines, rejilla LCD, CRT, LCD verde monocromo y los PPSSPP que
@@ -135,9 +135,12 @@ Más detalle:
 MIDP 2.0 completo para juegos (Canvas, GameCanvas, Graphics, Image, Font, Sprite, TiledLayer,
 LayerManager, Form/List/TextBox/Alert y sus Items), RMS, MMAPI (MIDI/WAV/MP3/AMR/OGG + tonos y
 ToneControl), HTTP, Nokia UI (FullCanvas, DirectGraphics, DirectUtils, DeviceControl, Sound) y
-Samsung (AudioClip, Vibration, LCDLight), y **3D M3G (JSR-184)** con el motor nativo de Nokia en C
-(solo en los ports de juegos 3D; requiere el NDK, que Android Studio instala). No soportados aún:
-MascotCapsule (3D), SMS, Bluetooth, FileConnection.
+Samsung (AudioClip, Vibration, LCDLight). **3D**: M3G (JSR-184) con el motor nativo de Nokia en C y
+MascotCapsule V3 (y las APIs 3D de JBlend/Vodafone/Motorola) con el renderizador de J2ME Loader; solo
+se compilan en los juegos 3D (NDK, que Android Studio instala). **Además** (de J2ME Loader, en
+`runtime-extra/`): APIs de Siemens, Motorola, Sony Ericsson, Samsung, Vodafone/J-Phone/KDDI,
+**sensores JSR-256** (acelerómetro), FileConnection/PIM, ubicación, SMS, Bluetooth, AMMS y todos los
+controles MMAPI, para que ningún juego se cierre por una clase que falta.
 
 ## Estructura del repositorio
 
@@ -145,6 +148,8 @@ MascotCapsule (3D), SMS, Bluetooth, FileConnection.
 tool/j2a.py              CLI (analyze, decompile, port, patch, verify, doctor)
 tool/j2a_tool/           parser de .class, parche de bytecode, descompilación, generador
 runtime/                 motor del port (se copia como módulo "engine" y se renombra al paquete del juego)
+runtime-m3g/             3D M3G: motor de Nokia en C + bindings Java (EPL 1.0)
+runtime-extra/           APIs de fabricante, sensores, JSR extra y MascotCapsule (de J2ME Loader, Apache 2.0)
 template/                plantilla del proyecto Android Studio (Gradle 9.3.1, AGP 9.1.1, compileSdk/targetSdk 37)
 samples/demo-midlet/     juego J2ME de prueba (GameCanvas, Sprite, RMS, Forms, sonido)
 docs/                    documentación

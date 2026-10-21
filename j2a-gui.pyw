@@ -20,9 +20,11 @@ from j2a_tool.jarinfo import MidletSuite  # noqa: E402
 
 # (texto visible, valor del comando); None = no pasar la opción (j2a decide/detecta)
 MODES = [("Código editable (recomendado)", "source"), ("Bytecode original (máxima fidelidad)", "jar")]
-SCREENS = [("Detectar automáticamente", None), ("128x160", "128x160"), ("176x208", "176x208"),
-           ("176x220", "176x220"), ("240x320", "240x320"), ("320x240 (horizontal)", "320x240"),
-           ("240x400", "240x400"), ("360x640", "360x640"), ("640x360 (horizontal)", "640x360")]
+SCREENS = [("Detectar automáticamente", None)] + [
+    ("%dx%d" % wh + (" (horizontal)" if wh[0] > wh[1] else ""), "%dx%d" % wh) for wh in (
+        (96, 65), (101, 80), (128, 128), (128, 160), (132, 176), (176, 204), (176, 208), (176, 220),
+        (208, 208), (240, 260), (240, 320), (320, 240), (240, 400), (400, 240), (240, 432), (352, 416),
+        (320, 480), (480, 320), (360, 640), (640, 360), (480, 640), (640, 480), (480, 800), (800, 480))]
 ORIENTATIONS = [("Detectar automáticamente", None), ("Vertical", "portrait"), ("Horizontal", "landscape"),
                 ("Girar libremente", "auto")]
 SHADERS = [("Píxeles nítidos", "nearest"), ("Nítido sin deformar (sharp)", "sharp"), ("Suavizado", "smooth"),

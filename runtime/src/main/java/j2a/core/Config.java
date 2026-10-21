@@ -10,6 +10,8 @@ public final class Config {
     /** Virtual J2ME screen size (what Canvas.getWidth()/getHeight() return). */
     public int screenWidth = 240;
     public int screenHeight = 320;
+    /** Resolution from port.properties (the game's own), before any player change. */
+    public int baseWidth = 240, baseHeight = 320;
     /** fit | integer | stretch */
     public String scaleMode = "fit";
     /** Kept for old port.properties: scale.filter=true means shader=smooth. */
@@ -40,8 +42,8 @@ public final class Config {
     /** Value of System.getProperty("microedition.platform"). */
     public String platform = "Nokia6300/07.21";
     public String locale = "es-MX";
-    /** softkey: BACK = right softkey | menu: BACK opens the port menu */
-    public String backAction = "softkey";
+    /** menu: Android back gesture/button opens the port menu | softkey: it is the game's right soft key */
+    public String backAction = "menu";
     public String midletClass;
     /** Key codes sent for the soft keys (Nokia/SE -6/-7, Motorola -21/-22, Siemens -1/-4). */
     public int softLeft = Keys.SOFT_LEFT, softRight = Keys.SOFT_RIGHT;
@@ -52,6 +54,8 @@ public final class Config {
         Config c = new Config();
         c.screenWidth = i(p, "screen.width", c.screenWidth);
         c.screenHeight = i(p, "screen.height", c.screenHeight);
+        c.baseWidth = c.screenWidth;
+        c.baseHeight = c.screenHeight;
         c.scaleMode = s(p, "scale.mode", c.scaleMode);
         c.filter = b(p, "scale.filter", c.filter);
         c.shader = s(p, "shader", c.filter ? "smooth" : "nearest");

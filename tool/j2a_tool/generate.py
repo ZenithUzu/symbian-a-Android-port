@@ -136,69 +136,95 @@ def jni_mangle(name):
     return name.replace("_", "_1").replace(".", "_")
 
 
-def copy_m3g(dst, engine_pkg, remap):
-    """Adds the native 3D engine (Nokia M3G, C) and its Java bindings to the engine module."""
-    root = paths.m3g_dir()
-    java_root = os.path.join(root, "java")
-    for d, _, files in os.walk(java_root):
-        for f in files:
-            rel = os.path.relpath(os.path.join(d, f), java_root).replace(os.sep, "/")
-            with io.open(os.path.join(d, f), encoding="utf-8") as fh:
-                text = fh.read()
-            if remap:
-                rel, text = remap[0].sub(remap[1], rel), remap[0].sub(remap[1], text)
-            target = os.path.join(dst, "src", "main", "java", rel.replace("/", os.sep))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with io.open(target, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(text)
-    # JNI function names encode the Java package: rename them along with the package
-    jni_old = "Java_javax_microedition_m3g_"
-    jni_new = "Java_%s_" % jni_mangle(engine_pkg + ".m3g") if remap else jni_old
-    cpp_root = os.path.join(root, "cpp")
-    for d, _, files in os.walk(cpp_root):
-        for f in files:
-            src = os.path.join(d, f)
-            target = os.path.join(dst, "src", "main", "cpp", os.path.relpath(src, cpp_root))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with open(src, "rb") as fh:
-                text = fh.read().decode("latin-1")  # byte-exact round trip for any encoding
-            with open(target, "wb") as fh:
-                fh.write(text.replace(jni_old, jni_new).encode("latin-1"))
-    shutil.copyfile(os.path.join(root, "NOTICE-M3G.md"), os.path.join(dst, "NOTICE-M3G.md"))
+# Native libraries: (name, source dir, Java package with natives, packages that need it).
+NATIVE_MODULES = [
+    ("m3g", lambda: paths.m3g_dir(), "javax/microedition/m3g", ("javax/microedition/m3g/",)),
+    ("micro3d", lambda: paths.extra_dir(), "ru/woesss/j2me/micro3d",
+     ("com/mascotcapsule/", "com/jblend/graphics/j3d/", "com/motorola/graphics/j3d/",
+      "com/motorola/iden/micro3d/", "com/vodafone/v10/graphics/j3d/")),
+]
+
+
+def needed_native_modules(used_classes):
+    return [m for m in NATIVE_MODULES if any(c.startswith(m[3]) for c in used_classes)]
+
+
+def _write_text(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def copy_engine(dst, engine_pkg, renamed, modules):
+    """Writes the 'engine' module: runtime + M3G bindings + extra APIs (Java, packages renamed to
+    <engine_pkg>.*), plus the native libraries listed in 'modules' (built with the NDK)."""
+    pkg_map = decompile.package_remapper(engine_pkg) if renamed else None
+    ren = (lambda t: pkg_map[0].sub(pkg_map[1], t)) if renamed else (lambda t: t)
+    # module files (build.gradle, manifest) from runtime/, Java from every source root
+    rt = paths.runtime_dir()
+    for f in ("build.gradle", os.path.join("src", "main", "AndroidManifest.xml")):
+        with io.open(os.path.join(rt, f), encoding="utf-8") as fh:
+            text = fh.read()
+        if f == "build.gradle":
+            text = text.replace("namespace = 'j2a.runtime'", "namespace = '%s'" % (engine_pkg if renamed else "j2a.runtime"))
+        _write_text(os.path.join(dst, f), text)
+    for root in paths.java_source_roots():
+        for d, _, files in os.walk(root):
+            for f in files:
+                if not f.endswith(".java"):
+                    continue
+                rel = os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/")
+                with io.open(os.path.join(d, f), encoding="utf-8") as fh:
+                    text = fh.read()
+                _write_text(os.path.join(dst, "src", "main", "java", ren(rel)), ren(text))
+    for name in ("NOTICE-M3G.md",):
+        shutil.copyfile(os.path.join(paths.m3g_dir(), name), os.path.join(dst, name))
+    shutil.copyfile(os.path.join(paths.extra_dir(), "NOTICE-EXTRA.md"), os.path.join(dst, "NOTICE-EXTRA.md"))
+    if not modules:
+        return
+    cpp_dst = os.path.join(dst, "src", "main", "cpp")
+    for name, root_fn, java_pkg, _ in modules:
+        # JNI function names encode the Java package: rename them along with it
+        jni_old = "Java_%s_" % jni_mangle(java_pkg.replace("/", "."))
+        new_pkg = decompile.engine_package(java_pkg, engine_pkg) if renamed else java_pkg
+        jni_new = "Java_%s_" % jni_mangle(new_pkg.replace("/", "."))
+        src_dir = os.path.join(root_fn(), "cpp", name)
+        for d, _, files in os.walk(src_dir):
+            for f in files:
+                src = os.path.join(d, f)
+                target = os.path.join(cpp_dst, name, os.path.relpath(src, src_dir))
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(src, "rb") as fh:
+                    text = fh.read().decode("latin-1")  # byte-exact round trip for any encoding
+                with open(target, "wb") as fh:
+                    fh.write(text.replace(jni_old, jni_new).encode("latin-1"))
+        assets = os.path.join(root_fn(), "assets", name)
+        if os.path.isdir(assets):
+            shutil.copytree(assets, os.path.join(dst, "src", "main", "assets", name), dirs_exist_ok=True)
+    _write_text(os.path.join(cpp_dst, "Android.mk"), "LOCAL_PATH := $(call my-dir)\n" + "".join(
+        "include $(LOCAL_PATH)/%s/Android.mk\n" % m[0] for m in modules))
+    _write_text(os.path.join(cpp_dst, "Application.mk"),
+                "APP_STL := c++_shared\nAPP_ABI := arm64-v8a armeabi-v7a x86_64 x86\nAPP_PLATFORM := android-21\n")
     gradle = os.path.join(dst, "build.gradle")
     with io.open(gradle, encoding="utf-8") as fh:
         text = fh.read()
-    text = text.replace("    lint {", """    // 3D (M3G): Nokia's native engine in C/C++, built with the NDK (Android Studio installs it)
+    text = text.replace("    lint {", """    // 3D engines in C/C++ (%s), built with the NDK (Android Studio installs it)
     externalNativeBuild {
         ndkBuild {
             path = file('src/main/cpp/Android.mk')
         }
     }
 
-    lint {""", 1)
-    with io.open(gradle, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(text)
+    lint {""" % ", ".join(m[0] for m in modules), 1)
+    _write_text(gradle, text)
 
 
-def copy_engine(dst, engine_pkg, remap):
-    """Copies runtime/ as the 'engine' module, moving sources to the renamed packages."""
-    src_root = paths.runtime_dir()
-    for d, dirs, files in os.walk(src_root):
-        dirs[:] = [x for x in dirs if x not in ("build", ".gradle")]
-        for f in files:
-            rel = os.path.relpath(os.path.join(d, f), src_root).replace(os.sep, "/")
-            with io.open(os.path.join(d, f), encoding="utf-8") as fh:
-                text = fh.read()
-            if remap:
-                rel = remap[0].sub(remap[1], rel)
-                text = remap[0].sub(remap[1], text)
-            if f == "build.gradle":
-                text = text.replace("namespace = 'j2a.runtime'",
-                                    "namespace = '%s'" % (engine_pkg if remap else "j2a.runtime"))
-            target = os.path.join(dst, rel.replace("/", os.sep))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with io.open(target, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(text)
+def rename_game_source(text, remap, pkg_remap):
+    """Game sources: exact engine classes, plus 'import javax.microedition.lcdui.*;' lines."""
+    if not remap:
+        return text
+    text = remap[0].sub(remap[1], text)
+    return re.sub(r"(?m)^import\s+[\w.]+\.\*;", lambda m: pkg_remap[0].sub(pkg_remap[1], m.group(0)), text)
 
 
 def rename_sources(root, remap):
@@ -379,10 +405,12 @@ def port(args):
     # Native port: the engine lives in the app's own package (<package>.engine.lcdui.Canvas...),
     # so the APK contains no javax.microedition / com.nokia classes at all.
     remap = None if args.keep_j2me_packages else decompile.native_remapper(engine_pkg)
-    copy_engine(os.path.join(out, "engine"), engine_pkg, remap)
-    if report["uses_m3g"]:
-        copy_m3g(os.path.join(out, "engine"), engine_pkg, remap)
-        log("  3D (M3G): motor 3D nativo incluido (engine/src/main/cpp); Android Studio usará el NDK")
+    pkg_remap = None if args.keep_j2me_packages else decompile.package_remapper(engine_pkg)
+    modules = needed_native_modules(set(report["supported"]))
+    copy_engine(os.path.join(out, "engine"), engine_pkg, remap is not None, modules)
+    if modules:
+        log("  3D nativo incluido (%s, engine/src/main/cpp): Android Studio usará el NDK"
+            % ", ".join(m[0] for m in modules))
 
     app = os.path.join(out, "app")
     java_root = os.path.join(app, "src", "main", "java")
@@ -400,7 +428,7 @@ def port(args):
             with io.open(files[c], encoding="utf-8", errors="replace") as fh:
                 text = fh.read()
             with io.open(dst, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(remap[0].sub(remap[1], text) if remap else text)
+                fh.write(rename_game_source(text, remap, pkg_remap))
         if game_jar_needed:
             st = decompile.patch_jar(suite.jar_path, os.path.join(libs_dir, "game.jar"),
                                      exclude=source_classes, remap=remap)
@@ -482,8 +510,8 @@ def _port_items(midlet_class, sw, sh, args):
         ("softkey.left", -6),
         ("softkey.right", -7),
         ("microedition.locale", "es-MX"),
-        ("# softkey = Atrás actúa como tecla derecha | menu = Atrás abre el menú del port", None),
-        ("back.action", "softkey"),
+        ("# menu = el gesto/botón Atrás abre el menú del port | softkey = Atrás es la tecla derecha del juego", None),
+        ("back.action", "menu"),
     ]
 
 

@@ -70,27 +70,32 @@ def cmd_verify(a):
     javac = paths.java_bin("javac")
     if not aj or not javac:
         sys.exit("Necesito javac y un android.jar (instala una plataforma en el SDK o usa --android-jar)")
-    srcs = []
-    for sub in ("engine/src/main/java", "app/src/main/java"):
+    def sources(sub):
+        out = []
         for d, _, fs in os.walk(os.path.join(a.project, sub)):
-            srcs += [os.path.join(d, f) for f in fs if f.endswith(".java")]
-    cp = [p for p in [os.path.join(a.project, "app", "libs", "game.jar")] if os.path.isfile(p)]
+            out += [os.path.join(d, f) for f in fs if f.endswith(".java")]
+        return out
+
+    def javac_run(files, args, tmp, name):
+        argfile = os.path.join(tmp, name + ".txt")
+        with open(argfile, "w", encoding="utf-8") as f:
+            f.write("\n".join('"%s"' % s.replace("\\", "/") for s in files))
+        r = subprocess.run([javac, "-nowarn", "-encoding", "UTF-8"] + args + ["@" + argfile],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            print(r.stderr[-6000:])
+            sys.exit("Fallo al compilar %s: %d errores" % (name, sum("error" in l for l in r.stderr.splitlines())))
+
+    engine, app = sources("engine/src/main/java"), sources("app/src/main/java")
+    game_jar = [p for p in [os.path.join(a.project, "app", "libs", "game.jar")] if os.path.isfile(p)]
     tmp = tempfile.mkdtemp(prefix="j2a-verify-")
     try:
-        argfile = os.path.join(tmp, "src.txt")
-        with open(argfile, "w", encoding="utf-8") as f:
-            f.write("\n".join('"%s"' % s.replace("\\", "/") for s in srcs))
-        cmd = [javac, "-nowarn", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-bootclasspath", aj,
-               "-d", os.path.join(tmp, "out"), "@" + argfile]
-        if cp:
-            cmd[1:1] = ["-cp", os.pathsep.join(cp)]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        errors = [l for l in r.stderr.splitlines() if "error" in l]
-        if r.returncode == 0:
-            print("OK: %d archivos Java compilan contra %s" % (len(srcs), aj))
-        else:
-            print(r.stderr[-6000:])
-            sys.exit("Fallo: %d errores" % len(errors))
+        eng_out = os.path.join(tmp, "engine")
+        # the engine module is Java 17, the game (app module) Java 8, as in the Gradle build
+        javac_run(engine, ["--release", "17", "-cp", aj, "-d", eng_out], tmp, "engine")
+        javac_run(app, ["-source", "8", "-target", "8", "-bootclasspath", aj,
+                        "-cp", os.pathsep.join([eng_out] + game_jar), "-d", os.path.join(tmp, "app")], tmp, "app")
+        print("OK: %d archivos Java compilan contra %s" % (len(engine) + len(app), aj))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

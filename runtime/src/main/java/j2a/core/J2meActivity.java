@@ -46,7 +46,6 @@ public class J2meActivity extends Activity {
         Config cfg = Config.load(port);
         Settings.apply(this, cfg);
         onConfigLoaded(cfg);
-        Host.applyOrientation(this);
         if (Build.VERSION.SDK_INT >= 33) registerBackCallback();
 
         FrameLayout root = new FrameLayout(this);
@@ -63,6 +62,7 @@ public class J2meActivity extends Activity {
 
         setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC); // volume keys = game volume
         Host.init(this, cfg, app, gl, view, screens);
+        Host.applyOrientation(this); // after init: includes the rotation AutoFit remembered
         if (launched) {
             // The activity was recreated while the process survived: the
             // MIDlet keeps running, we only re-attached the views.
@@ -163,9 +163,9 @@ public class J2meActivity extends Activity {
                 && code != KeyEvent.KEYCODE_BACK) {
             return super.dispatchKeyEvent(e);
         }
-        if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) {
+        if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE || code == KeyEvent.KEYCODE_MENU) {
             if (e.getAction() == KeyEvent.ACTION_UP && !e.isCanceled()) {
-                if (code == KeyEvent.KEYCODE_ESCAPE) Host.showPortMenu();
+                if (code != KeyEvent.KEYCODE_BACK) Host.showPortMenu();
                 else Host.backPressed();
             }
             return true;

@@ -11,7 +11,8 @@ public abstract class Displayable {
     CommandListener listener;
     volatile boolean shown;
 
-    Displayable() {}
+    /** Protected so vendor screens (Siemens lcdui) can extend it. */
+    protected Displayable() {}
 
     public String getTitle() { return title; }
 

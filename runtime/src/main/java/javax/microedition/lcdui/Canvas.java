@@ -107,6 +107,11 @@ public abstract class Canvas extends Displayable {
         if (shown) Host.events.serviceRepaints();
     }
 
+    /** Vendor APIs (Siemens ExtendedImage, Vodafone SpriteCanvas): show an image on screen now. */
+    public void flushBuffer(Image image, int x, int y) {
+        Host.drawToScreen(image, x, y);
+    }
+
     public void setFullScreenMode(boolean mode) {
         fullScreen = mode;
         repaint();

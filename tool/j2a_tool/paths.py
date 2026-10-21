@@ -17,9 +17,15 @@ def m3g_dir():
     return os.path.join(REPO, "runtime-m3g")
 
 
+def extra_dir():
+    """Extra device APIs (vendor, sensors, MascotCapsule...) imported from J2ME Loader."""
+    return os.path.join(REPO, "runtime-extra")
+
+
 def java_source_roots():
-    """All Java source trees of the engine (runtime + optional M3G bindings)."""
-    return [os.path.join(runtime_dir(), "src", "main", "java"), os.path.join(m3g_dir(), "java")]
+    """All Java source trees of the engine (runtime + M3G bindings + extra APIs)."""
+    return [os.path.join(runtime_dir(), "src", "main", "java"), os.path.join(m3g_dir(), "java"),
+            os.path.join(extra_dir(), "java")]
 
 
 def template_dir():

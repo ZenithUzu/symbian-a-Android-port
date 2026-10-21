@@ -463,6 +463,11 @@ public class Graphics {
 
     public Canvas j2aCanvas() { return canvas; }
 
+    /** Same as j2aCanvas()/j2aTarget(), names used by vendor APIs. */
+    public Canvas getCanvas() { return canvas; }
+
+    public Bitmap getBitmap() { return target; }
+
     public Paint j2aBitmapPaint() { return bmp; }
 
     public Bitmap j2aTarget() { return target; }

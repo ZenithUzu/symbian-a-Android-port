@@ -12,9 +12,13 @@ import android.graphics.Rect;
  * a game: at worst the full screen is shown, as before. The result is remembered per game.
  */
 public final class AutoFit {
-    private static final int[][] KNOWN = {
-            {128, 128}, {128, 160}, {132, 176}, {176, 208}, {176, 220}, {208, 208}, {240, 320},
-            {320, 240}, {240, 400}, {400, 240}, {352, 416}, {360, 640}, {640, 360}, {320, 480}, {480, 320}};
+    /** Classic phone resolutions (portrait and landscape where both existed). */
+    public static final int[][] RESOLUTIONS = {
+            {96, 65}, {101, 80}, {128, 128}, {128, 160}, {132, 176}, {176, 204}, {176, 208}, {176, 220},
+            {208, 208}, {240, 260}, {240, 320}, {320, 240}, {240, 400}, {400, 240}, {240, 432}, {352, 416},
+            {320, 480}, {480, 320}, {360, 640}, {640, 360}, {480, 640}, {640, 480}, {480, 800}, {800, 480}};
+
+    private static final int[][] KNOWN = RESOLUTIONS;
     private static final int TOLERANCE = 4;
     private static final long WARMUP_NS = 5000000000L, GIVE_UP_NS = 120000000000L;
 

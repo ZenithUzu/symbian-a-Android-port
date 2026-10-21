@@ -28,7 +28,16 @@ public final class Font {
     final Paint paint;
     private final int ascent, descent, height;
 
+    /** Font of any pixel height (Nokia FreeSizeFontInvoker). */
+    public static Font j2aFontWithHeight(int face, int style, int pixelHeight) {
+        return new Font(face, style, SIZE_MEDIUM, pixelHeight);
+    }
+
     private Font(int face, int style, int size) {
+        this(face, style, size, 0);
+    }
+
+    private Font(int face, int style, int size, int pixelHeight) {
         this.face = face;
         this.style = style;
         this.size = size;
@@ -39,7 +48,7 @@ public final class Font {
         paint.setTypeface(Typeface.create(base, tstyle));
         paint.setAntiAlias(Host.cfg.textAntialias);
         paint.setUnderlineText((style & STYLE_UNDERLINED) != 0);
-        int px = Host.cfg.fontPx(size == SIZE_SMALL, size == SIZE_LARGE);
+        int px = pixelHeight > 0 ? pixelHeight : Host.cfg.fontPx(size == SIZE_SMALL, size == SIZE_LARGE);
         paint.setTextSize(px);
         Paint.FontMetricsInt fm = paint.getFontMetricsInt();
         ascent = -fm.ascent;

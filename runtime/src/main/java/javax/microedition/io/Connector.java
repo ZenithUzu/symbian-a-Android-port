@@ -25,7 +25,8 @@ public class Connector {
         if (name == null) throw new IllegalArgumentException("null URL");
         String lower = name.toLowerCase();
         if (lower.startsWith("http://") || lower.startsWith("https://")) return new HttpConnectionImpl(name);
-        throw new ConnectionNotFoundException("Protocol not supported by j2a: " + name);
+        // file://, socket://, datagram://, sms://, sensor:, btspp://... (implementations from J2ME Loader)
+        return org.microemu.microedition.ImplFactory.getCGFImplementation(name).open(name, mode, timeouts);
     }
 
     public static DataInputStream openDataInputStream(String name) throws IOException {

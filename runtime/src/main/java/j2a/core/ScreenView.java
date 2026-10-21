@@ -140,7 +140,6 @@ public class ScreenView extends View {
             float pad = 6 * density;
             if (!keypad) {
                 fit(0, 0, w, h);
-                addFloatingMenu(w, h);
             } else if (h >= w) {
                 fit(0, 0, w, (int) (h * 0.62f));
                 float top = dst.bottom + pad;
@@ -157,8 +156,7 @@ public class ScreenView extends View {
                 float rx = Math.min(dst.right, w - side * 0.6f);
                 float rowH = Math.min(h * 0.16f, 54 * density);
                 add(0, 0, lw, rowH, Keys.SOFT_LEFT, "", 1);
-                add(rx, 0, rx + (w - rx) * 0.7f, rowH, Keys.SOFT_RIGHT, "", 2);
-                add(rx + (w - rx) * 0.7f, 0, w, rowH, 0, "☰", 3);
+                add(rx, 0, w, rowH, Keys.SOFT_RIGHT, "", 2);
                 addDpad(new RectF(0, rowH + pad, lw, h - pad), full);
                 RectF right = new RectF(rx, rowH + pad, w, h - pad);
                 if (full) addGrid(right); else addOk(right);
@@ -208,23 +206,10 @@ public class ScreenView extends View {
         buttons.add(new Button(l + in, t + in, r - in, b - in, code, label, kind));
     }
 
-    /**
-     * Without keypad the menu stays reachable through a small ☰: in the black bars when there
-     * is room, otherwise faded in the top corner (the game keeps every other touch).
-     */
-    private void addFloatingMenu(int w, int h) {
-        float s = 40 * density;
-        if (dst.top >= s) add(w - s, 0, w, s, 0, "\u2630", 5);
-        else if (w - dst.right >= s) add(w - s, 0, w, s, 0, "\u2630", 5);
-        else if (dst.left >= s) add(0, 0, s, s, 0, "\u2630", 5);
-        else add(w - s * 0.8f, 0, w, s * 0.8f, 0, "\u2630", 5);
-    }
-
     private void addSoftRow(float l, float t, float r, float b) {
         float w = r - l;
-        add(l, t, l + w * 0.36f, b, Keys.SOFT_LEFT, "", 1);
-        add(l + w * 0.42f, t, l + w * 0.58f, b, 0, "☰", 3);
-        add(l + w * 0.64f, t, r, b, Keys.SOFT_RIGHT, "", 2);
+        add(l, t, l + w * 0.48f, b, Keys.SOFT_LEFT, "", 1);
+        add(l + w * 0.52f, t, r, b, Keys.SOFT_RIGHT, "", 2);
     }
 
     private void addDpad(RectF a, boolean diagonals) {
