@@ -47,7 +47,9 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     private int aPos, aTex, uTexel, uPixel, uSampler;
     private final FloatBuffer quad;
 
+    private final Object paceLock = new Object();
     private long nextFrameNs;
+    private int presented, throttled; // frames shown / frames a game thread was already paced for
     private int frames;
     private long fpsWindowNs;
     volatile int fps;
@@ -89,14 +91,15 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         // The J2ME event thread (Canvas.paint) also delivers key/touch events: never make it
         // wait for the GPU, or input queues up behind frames and controls feel laggy.
         boolean gameThread = Looper.myLooper() != Looper.getMainLooper() && !Host.events.isEventThread();
-        if (gameThread && c.fpsLimit > 0) pace(c.fpsLimit);
-        synchronized (lock) {
-            if (gameThread && !"unlimited".equals(c.fpsMode)) {
-                long until = System.currentTimeMillis() + 100; // never block a game forever
-                while (pending && System.currentTimeMillis() < until) {
-                    try { lock.wait(20); } catch (InterruptedException e) { return; }
-                }
+        if (gameThread) {
+            synchronized (paceLock) {
+                if (c.fpsLimit > 0) pace(c.fpsLimit);
+                if (!"unlimited".equals(c.fpsMode)) waitShown();
+                throttled = presented + 1; // this frame is paced: repaint()/serviceRepaints() don't wait again
             }
+        }
+        synchronized (lock) {
+            presented++;
             if (staging == null || staging.getWidth() != frame.getWidth() || staging.getHeight() != frame.getHeight()) {
                 staging = Bitmap.createBitmap(frame.getWidth(), frame.getHeight(), Bitmap.Config.ARGB_8888);
                 stagingCanvas = new Canvas(staging);
@@ -109,6 +112,33 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         countFrame();
         AutoFit.frameShown();
         requestRender();
+    }
+
+    /**
+     * Pacing for games whose frames are painted by the event thread (repaint(), serviceRepaints(),
+     * callSerially loops): the game thread asking for frames waits here, once per frame shown.
+     * The event thread itself is only paced inside a callSerially loop, which is the game loop.
+     */
+    void throttle() {
+        Config c = Host.cfg;
+        synchronized (paceLock) {
+            synchronized (lock) {
+                if (presented == throttled) return; // nothing shown since the last wait
+                throttled = presented;
+            }
+            if (c.fpsLimit > 0) pace(c.fpsLimit);
+            if (!"unlimited".equals(c.fpsMode) && !Host.events.isEventThread()) waitShown();
+        }
+    }
+
+    /** vsync: waits until the previous frame reached the display (at most 100 ms). */
+    private void waitShown() {
+        synchronized (lock) {
+            long until = System.currentTimeMillis() + 100; // never block a game forever
+            while (pending && System.currentTimeMillis() < until) {
+                try { lock.wait(20); } catch (InterruptedException e) { return; }
+            }
+        }
     }
 
     /** Fixed-cadence limiter in nanoseconds (30 really gives 30). */
@@ -131,6 +161,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             fpsWindowNs = now;
             if (Host.cfg.showFps) Host.redrawOverlay();
             if ("dynamic".equals(Host.cfg.fpsMode)) matchRefreshRate(fps);
+            else if (requestedRate != 0) setRefreshRate(0); // left dynamic mode: give the display back
         }
     }
 
@@ -139,12 +170,22 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         if (Build.VERSION.SDK_INT < 30 || gameFps <= 0) return;
         // never below 60 Hz: at 30/48 Hz touch and the on-screen keypad visibly lag
         float rate = gameFps <= 64 ? 60f : gameFps <= 95 ? 90f : 120f;
-        if (rate == requestedRate) return;
+        if (rate != requestedRate) setRefreshRate(rate);
+    }
+
+    /** rate 0 = no preference. */
+    private void setRefreshRate(float rate) {
         requestedRate = rate;
         try {
             Surface s = getHolder().getSurface();
-            Surface.class.getMethod("setFrameRate", float.class, int.class).invoke(s, rate, 0);
+            if (Build.VERSION.SDK_INT >= 31) {
+                // FIXED_SOURCE + CHANGE_FRAME_RATE_ALWAYS: also when the switch isn't seamless (most phones)
+                Surface.class.getMethod("setFrameRate", float.class, int.class, int.class).invoke(s, rate, 1, 1);
+            } else {
+                Surface.class.getMethod("setFrameRate", float.class, int.class).invoke(s, rate, 1);
+            }
         } catch (Throwable ignored) {}
+        Host.preferRefreshRate(rate); // Xiaomi/Samsung often ignore setFrameRate but honor the window's mode
     }
 
     // ------------------------------------------------------------------ renderer

@@ -96,7 +96,10 @@ public abstract class Canvas extends Displayable {
     protected void sizeChanged(int w, int h) {}
 
     public final void repaint() {
-        if (shown) Host.events.postRepaint(this);
+        if (!shown) return;
+        // game loops that only call repaint() get the FPS limit here (never key/touch handlers)
+        if (!Host.events.isEventThread()) Host.throttle();
+        Host.events.postRepaint(this);
     }
 
     public final void repaint(int x, int y, int width, int height) {
@@ -104,7 +107,9 @@ public abstract class Canvas extends Displayable {
     }
 
     public final void serviceRepaints() {
-        if (shown) Host.events.serviceRepaints();
+        if (!shown) return;
+        Host.events.serviceRepaints();
+        if (!Host.events.isEventThread()) Host.throttle();
     }
 
     /** Vendor APIs (Siemens ExtendedImage, Vodafone SpriteCanvas): show an image on screen now. */

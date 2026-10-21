@@ -18,6 +18,7 @@ public final class EventQueue implements Runnable {
     private Canvas repaintTarget;
     private boolean repaintPending;
     private boolean painting;
+    private boolean paintedLast; // event thread only
     private volatile boolean running = true;
     private Thread thread;
 
@@ -77,7 +78,11 @@ public final class EventQueue implements Runnable {
                     try { lock.wait(); } catch (InterruptedException e) { return; }
                 }
                 if (!running) return;
-                if (!queue.isEmpty()) r = queue.removeFirst();
+                // MIDP: callSerially() runs after pending repaints (games that loop with callSerially(this)
+                // keep the queue full and would never be painted). Paint and queue take turns, so a game
+                // that repaints nonstop can't starve key/touch events either.
+                if (!queue.isEmpty() && (!repaintPending || paintedLast)) r = queue.removeFirst();
+                paintedLast = r == null;
             }
             try {
                 if (r != null) r.run();

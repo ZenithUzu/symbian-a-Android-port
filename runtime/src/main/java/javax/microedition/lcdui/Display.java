@@ -47,6 +47,7 @@ public class Display {
     }
 
     public void callSerially(Runnable r) {
+        Host.throttle(); // a callSerially(this) game loop gets the FPS limit here
         Host.events.post(r);
     }
 

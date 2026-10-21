@@ -6,12 +6,14 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Vibrator;
 import android.util.Log;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import java.io.File;
 import java.util.Properties;
@@ -97,6 +99,15 @@ public final class Host {
                     android.uncaughtException(t, e);
                 } else {
                     Log.e(TAG, "Thread '" + t.getName() + "' ended with an exception (ignored, as on a phone)", e);
+                    // keep playing, but say so: a dead loader thread otherwise looks like an endless loading screen
+                    final String msg = "Error del juego: " + e;
+                    runOnUi(new Runnable() {
+                        public void run() {
+                            if (activity != null) {
+                                Toast.makeText(activity, msg, Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    });
                 }
             }
         });
@@ -291,6 +302,35 @@ public final class Host {
             }
         }
         present(screenImage.j2aBitmap());
+    }
+
+    /** Asks for the display mode (same resolution) whose refresh rate is closest to 'rate'; 0 = system default. */
+    static void preferRefreshRate(final float rate) {
+        runOnUi(new Runnable() {
+            public void run() {
+                Activity a = activity;
+                if (a == null || Build.VERSION.SDK_INT < 23) return;
+                android.view.Display d = a.getWindowManager().getDefaultDisplay();
+                android.view.Display.Mode cur = d.getMode();
+                int best = 0;
+                float diff = Float.MAX_VALUE;
+                for (android.view.Display.Mode m : rate > 0 ? d.getSupportedModes() : new android.view.Display.Mode[0]) {
+                    if (m.getPhysicalWidth() != cur.getPhysicalWidth() || m.getPhysicalHeight() != cur.getPhysicalHeight()) continue;
+                    float dd = Math.abs(m.getRefreshRate() - rate);
+                    if (dd < diff) { diff = dd; best = m.getModeId(); }
+                }
+                android.view.WindowManager.LayoutParams lp = a.getWindow().getAttributes();
+                if (lp.preferredDisplayModeId == best) return;
+                lp.preferredDisplayModeId = best;
+                a.getWindow().setAttributes(lp);
+            }
+        });
+    }
+
+    /** FPS limit / vsync for games drawn with repaint() or callSerially() (see GlScreen.throttle). */
+    public static void throttle() {
+        GlScreen g = gl;
+        if (g != null && !paused && Looper.myLooper() != Looper.getMainLooper()) g.throttle();
     }
 
     /** Shows a finished frame (screen bitmap or GameCanvas buffer). */

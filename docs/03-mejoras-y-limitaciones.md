@@ -14,17 +14,17 @@ Menú/Escape). El menú también tiene accesos a las teclas izquierda y derecha 
 | **Ajuste automático dentro del APK**: si el juego solo dibuja una parte de la pantalla (p. ej. 176x208 dentro de 240x320), muestra solo esa parte a pantalla completa y gira el móvil a su orientación. Se recuerda para la próxima vez | `auto.fit`, menú |
 | Shaders por GPU (OpenGL ES 2.0): nítido, suavizado, *sharp bilinear*, scanlines, rejilla LCD, CRT, LCD verde | `shader=...`, menú |
 | Shaders externos en formato PPSSPP (`.ini/.fsh/.vsh`), p. ej. jdgleaver/ppsspp_shaders | `--shaders carpeta/` |
-| Modo de FPS: **vsync** (como el `flushGraphics` bloqueante de un teléfono), **dinámico** (Android 11+ cambia la tasa de refresco de la pantalla a la de los FPS del juego: 30/48/60/90/120 Hz, más fluido y menos batería) o sin límite | `fps.mode`, menú |
+| Modo de FPS: **vsync** (como el `flushGraphics` bloqueante de un teléfono), **dinámico** (Android 11+ cambia la tasa de refresco de la pantalla a la de los FPS del juego: 30/48/60/90/120 Hz, más fluido y menos batería) o sin límite. En el modo dinámico la app pide la tasa a la pantalla de dos formas (`setFrameRate` y el modo de pantalla de la ventana), porque Xiaomi y Samsung suelen ignorar la primera | `fps.mode`, menú |
 | Captura de pantalla escalada sin borrosidad a la galería | menú |
 | El teclado táctil se oculta solo al usar mando o teclado y vuelve al tocar la pantalla | automático |
 | Botones de volumen controlan el volumen del juego | automático |
-| Un hilo del juego que lanza una excepción ya no cierra la app (como en el teléfono, solo termina ese hilo) | automático |
+| Un hilo del juego que lanza una excepción ya no cierra la app (como en el teléfono, solo termina ese hilo); se avisa en pantalla con el error, para que una carga infinita no quede sin explicación | automático |
 | En segundo plano el juego no consume CPU aunque su bucle no tenga `sleep()` | automático |
 | Teclado virtual multitáctil: cruceta con diagonales (1/3/7/9), teclado numérico, soft keys con el nombre del comando | `keypad=full|minimal|none`, `keypad.alpha`, `keypad.haptics` |
 | Mandos y teclados físicos (cruceta, A/B/X/Y, L1/R1, Start/Select, WASD, números) | automático |
 | Pantalla táctil **multitáctil**: cada dedo llega al juego (`pointerPressed/Dragged/Released` + `com.nokia.pointer.number` como en la API multipunto de Nokia), así se puede mover y saltar a la vez en los controles táctiles del propio juego | automático |
 | Juegos táctiles: si el manifiesto dice `Nokia-MIDlet-On-Screen-Keypad: no` no se muestra teclado; si el juego acepta toques, la primera vez pregunta "¿mostrar teclado?". El menú se abre con el gesto Atrás | `keypad`, `keypad.ask`, menú |
-| Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido | `fps.limit=30` |
+| Limitador de FPS de cadencia fija (30 da 30, no ~27) para juegos que van demasiado rápido. Funciona en los tres tipos de bucle de juego: `flushGraphics()`, `repaint()`/`serviceRepaints()` y `callSerially()` | `fps.limit=30` |
 | Resolución elegible en el APK: la original del juego, 24 resoluciones clásicas (96x65 … 800x480, vertical y horizontal), **widescreen real** con la proporción del móvil o **personalizada**; el juego se reinicia solo para aplicarla | menú del port |
 | Rotación elegible en el APK (automática/vertical/horizontal) | menú del port |
 | **Girar imagen 90°/270°** para juegos que se juegan de lado en un teléfono vertical: la app pasa a horizontal de verdad (barra de notificaciones y gestos correctos) y el táctil se gira también. **Automático por defecto**: si casi todo lo que dibuja el juego son imágenes giradas (`TRANS_ROT90/270`, `DirectGraphics.ROTATE_90/270`), gira solo y lo recuerda | `rotate=-1|0|90|270`, `--rotate`, menú |
