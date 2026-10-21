@@ -14,25 +14,25 @@ public final class Keys {
 
     private Keys() {}
 
-    /** Gamepad buttons and d-pad -> control id of Config.padMap (same keys as the on-screen pad), or null. */
+    /** Gamepad buttons and d-pad -> physical control id of Config.padMap ("pa", "pdu"...), or null. */
     public static String padId(int keyCode) {
         switch (keyCode) {
-            case KeyEvent.KEYCODE_BUTTON_A: return "a";
-            case KeyEvent.KEYCODE_BUTTON_B: return "b";
-            case KeyEvent.KEYCODE_BUTTON_X: return "x";
-            case KeyEvent.KEYCODE_BUTTON_Y: return "y";
-            case KeyEvent.KEYCODE_BUTTON_L1: return "l";
-            case KeyEvent.KEYCODE_BUTTON_R1: return "r";
-            case KeyEvent.KEYCODE_BUTTON_L2: return "l2";
-            case KeyEvent.KEYCODE_BUTTON_R2: return "r2";
-            case KeyEvent.KEYCODE_BUTTON_THUMBL: return "l3";
-            case KeyEvent.KEYCODE_BUTTON_THUMBR: return "r3";
-            case KeyEvent.KEYCODE_BUTTON_SELECT: return "select";
-            case KeyEvent.KEYCODE_BUTTON_START: return "start";
-            case KeyEvent.KEYCODE_DPAD_UP: return "du";
-            case KeyEvent.KEYCODE_DPAD_DOWN: return "dd";
-            case KeyEvent.KEYCODE_DPAD_LEFT: return "dl";
-            case KeyEvent.KEYCODE_DPAD_RIGHT: return "dr";
+            case KeyEvent.KEYCODE_BUTTON_A: return "pa";
+            case KeyEvent.KEYCODE_BUTTON_B: return "pb";
+            case KeyEvent.KEYCODE_BUTTON_X: return "px";
+            case KeyEvent.KEYCODE_BUTTON_Y: return "py";
+            case KeyEvent.KEYCODE_BUTTON_L1: return "pl";
+            case KeyEvent.KEYCODE_BUTTON_R1: return "pr";
+            case KeyEvent.KEYCODE_BUTTON_L2: return "pl2";
+            case KeyEvent.KEYCODE_BUTTON_R2: return "pr2";
+            case KeyEvent.KEYCODE_BUTTON_THUMBL: return "pl3";
+            case KeyEvent.KEYCODE_BUTTON_THUMBR: return "pr3";
+            case KeyEvent.KEYCODE_BUTTON_SELECT: return "pselect";
+            case KeyEvent.KEYCODE_BUTTON_START: return "pstart";
+            case KeyEvent.KEYCODE_DPAD_UP: return "pdu";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "pdd";
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "pdl";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "pdr";
             default: return null;
         }
     }

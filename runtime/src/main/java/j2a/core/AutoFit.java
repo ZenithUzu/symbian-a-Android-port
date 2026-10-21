@@ -20,7 +20,10 @@ public final class AutoFit {
 
     private static final int[][] KNOWN = RESOLUTIONS;
     private static final int TOLERANCE = 4;
-    private static final long WARMUP_NS = 5000000000L, GIVE_UP_NS = 120000000000L;
+    // Deciding early on a splash/transition (a logo in a corner) zoomed in and then jumped back: wait,
+    // and only crop once the drawn area has stopped growing for a while.
+    private static final long WARMUP_NS = 12000000000L, STABLE_NS = 6000000000L, GIVE_UP_NS = 120000000000L;
+    private static volatile long lastGrowNs;
 
     /** Read by Graphics on every draw: keep it a plain field. */
     public static volatile boolean tracking;
@@ -103,6 +106,7 @@ public final class AutoFit {
         if (targetW != screenW || targetH != screenH) return;
         if (dl <= 0 && dt <= 0 && dr >= screenW && db >= screenH) return; // clears say nothing
         synchronized (lock) {
+            if (dl < l || dt < t || dr > r || db > b) lastGrowNs = System.nanoTime();
             if (dl < l) l = dl;
             if (dt < t) t = dt;
             if (dr > r) r = dr;
@@ -120,7 +124,7 @@ public final class AutoFit {
             tracking = false; // undecided after 2 min: leave the full screen, try again next launch
             return;
         }
-        if (frames < 120 || now - firstNs < WARMUP_NS) return;
+        if (frames < 300 || now - firstNs < WARMUP_NS) return;
         if (!rotationDecided) decideRotation();
         if (fitDone) return;
         int cl, ct, cr, cb;
@@ -135,6 +139,7 @@ public final class AutoFit {
         if (current != null && cl >= current.left && ct >= current.top && cr <= current.right && cb <= current.bottom) {
             return; // still inside the fitted area
         }
+        if (current == null && now - lastGrowNs < STABLE_NS) return; // still drawing new areas
         int[] match = snap(cl, ct, cr, cb);
         if (match == null) {
             if (!fitsAnySmaller(cr - cl, cb - ct)) decide(null); // bigger than any smaller size: full screen
@@ -182,9 +187,10 @@ public final class AutoFit {
     }
 
     /**
-     * Known resolution smaller than the screen matching the drawn area: {left, top, w, h}.
-     * Content at (0,0) is how fixed-size games draw; centered content (games that center
-     * themselves, or the "widescreen" resolution) must be at least 176 px to rule out logos.
+     * Area to show: {left, top, w, h}. A known resolution smaller than the screen matching the drawn
+     * area; content at (0,0) is how fixed-size games draw, and any size there counts (a game for a
+     * 320x240 screen in a 360x240 one would otherwise sit off-center). Centered content (games that
+     * center themselves, or the "widescreen" resolution) must be a known size of at least 176 px.
      */
     static int[] snap(int dl, int dt, int dr, int db) {
         boolean anchored = dl <= TOLERANCE && dt <= TOLERANCE;
@@ -197,6 +203,10 @@ public final class AutoFit {
             if (w <= k[0] && w >= k[0] - TOLERANCE && h <= k[1] && h >= k[1] - TOLERANCE) {
                 return new int[]{left, top, k[0], k[1]};
             }
+        }
+        boolean smaller = w < screenW - TOLERANCE || h < screenH - TOLERANCE;
+        if (anchored && smaller && w >= 96 && h >= 64 && w <= screenW && h <= screenH) {
+            return new int[]{0, 0, (w + 1) & ~1, (h + 1) & ~1}; // whatever size the game really uses
         }
         return null;
     }
@@ -233,7 +243,9 @@ public final class AutoFit {
         screenH = 320;
         if (snap(0, 0, 176, 208) == null || snap(0, 0, 176, 208)[2] != 176) throw new AssertionError("176x208");
         if (snap(30, 40, 176, 208) != null) throw new AssertionError("centered content must not fit");
-        if (snap(0, 0, 230, 300) != null) throw new AssertionError("240x320 game with margins must not fit");
+        if (snap(0, 0, 237, 318) != null) throw new AssertionError("almost the whole screen must not fit");
+        int[] odd = snap(0, 0, 200, 300); // fixed-size game of a size not in the list: still shown alone
+        if (odd == null || odd[2] != 200 || odd[3] != 300) throw new AssertionError("anchored odd size");
         if (snap(0, 0, 240, 320) != null) throw new AssertionError("full screen is not a smaller size");
         if (!fitsAnySmaller(100, 50) || fitsAnySmaller(239, 319)) throw new AssertionError("fitsAnySmaller");
         if (snap(60, 100, 160, 150) != null) throw new AssertionError("small centered logo must not fit");

@@ -515,9 +515,10 @@ def _port_items(midlet_class, sw, sh, args):
         ("pad.scale", 100),
         ("# Tecla del juego que manda cada control (-5 = OK, 53 = tecla 5, 48 = 0, 42 = *, 35 = #, -6/-7 = teclas", None),
         ("# izquierda/derecha, -1..-4 = flechas, 0 = nada). a b x y l r select start, cruceta du dd dl dr, joystick", None),
-        ("# su sd sl sr; solo mando físico: l2 r2 l3 r3 y stick derecho ru rd rl rr", None),
+        ("# su sd sl sr. Mando físico, aparte: los mismos con p delante (pa, pdu, psu...) más pl2 pr2 pl3 pr3", None),
+        ("# y el stick derecho pru prd prl prr; si falta uno, el mando físico usa el de pantalla", None),
         ("pad.map", "a=-5,b=55,x=57,y=48,l=42,r=35,select=-6,start=-7,du=-1,dd=-2,dl=-3,dr=-4,su=-1,sd=-2,sl=-3,sr=-4,"
-                    "l2=49,r2=51,l3=53,r3=48,ru=50,rd=56,rl=52,rr=54"),
+                    "pl2=49,pr2=51,pl3=53,pr3=48,pru=50,prd=56,prl=52,prr=54"),
         ("# Controles ocultos: dpad,stick,a,b,x,y,l,r,select,start,toggle", None),
         ("pad.hide", ""),
         ("# true = imagen centrada en toda la pantalla (los controles quedan encima de los bordes)", None),

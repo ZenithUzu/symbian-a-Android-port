@@ -217,15 +217,15 @@ public class J2meActivity extends Activity {
             return super.onGenericMotionEvent(e);
         }
         if (Host.view != null) Host.view.setControllerActive(true);
-        axes("d", e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y));
-        axes("s", e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y));
-        axes("r", e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ));
-        pad("l2", Math.max(e.getAxisValue(MotionEvent.AXIS_LTRIGGER), e.getAxisValue(MotionEvent.AXIS_BRAKE)) > 0.5f);
-        pad("r2", Math.max(e.getAxisValue(MotionEvent.AXIS_RTRIGGER), e.getAxisValue(MotionEvent.AXIS_GAS)) > 0.5f);
+        axes("pd", e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y));
+        axes("ps", e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y));
+        axes("pr", e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ));
+        pad("pl2", Math.max(e.getAxisValue(MotionEvent.AXIS_LTRIGGER), e.getAxisValue(MotionEvent.AXIS_BRAKE)) > 0.5f);
+        pad("pr2", Math.max(e.getAxisValue(MotionEvent.AXIS_RTRIGGER), e.getAxisValue(MotionEvent.AXIS_GAS)) > 0.5f);
         return true;
     }
 
-    /** One stick or hat -> its four direction ids ("du", "dd"...), with a dead zone. */
+    /** One stick or hat -> its four direction ids ("pdu", "pdd"...), with a dead zone. */
     private void axes(String p, float x, float y) {
         pad(p + "u", y < -0.5f);
         pad(p + "d", y > 0.5f);

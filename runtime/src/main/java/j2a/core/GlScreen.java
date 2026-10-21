@@ -54,6 +54,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     /** Ping-pong render targets between passes (output size), recreated when the size changes. */
     private final int[] fbo = new int[2], fboTex = new int[2];
     private int fboW, fboH, frameCount;
+    private boolean targetsOk;
     private static final float[] IDENTITY = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
     private final FloatBuffer quad;
     /** Quad for reading a render target: v = 0 is its bottom row. */
@@ -238,7 +239,15 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         GLES20.glViewport(0, 0, viewW, viewH);
         GLES20.glClearColor(0, 0, 0, 1);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-        if (!Host.cfg.shader.equals(loadedShader)) loadShader(Host.cfg.shader);
+        if (!Host.cfg.shader.equals(loadedShader)) {
+            try {
+                loadShader(Host.cfg.shader);
+            } catch (RuntimeException e) { // a broken filter must never kill the drawing thread (black screen)
+                Log.w(TAG, "Filters '" + Host.cfg.shader + "' failed", e);
+                passes.clear();
+                loadShader("nearest");
+            }
+        }
         Rect r = drawRect;
         synchronized (lock) {
             r.set(dst);
@@ -264,20 +273,21 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         if (r.isEmpty() || passes.isEmpty()) return;
         frameCount++;
         setTexCoords(AutoFit.area());
-        int n = passes.size();
+        int n = passes.size(), first = 0;
         if (n > 1) ensureTargets(r.width(), r.height());
+        if (n > 1 && !targetsOk) first = n - 1; // no render targets on this GPU: just the last filter
         // game pixels in screen orientation: what effects after the first pass line up with
         Rect a = AutoFit.area();
         boolean turned = Host.rotation() == 90 || Host.rotation() == 270;
         float gw = turned ? a.height() : a.width(), gh = turned ? a.width() : a.height();
-        for (int i = 0; i < n; i++) {
+        for (int i = first; i < n; i++) {
             Pass p = passes.get(i);
             boolean last = i == n - 1;
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, last ? 0 : fbo[i % 2]);
             if (last) GLES20.glViewport(r.left, viewH - r.bottom, r.width(), r.height());
             else GLES20.glViewport(0, 0, r.width(), r.height());
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, i == 0 ? texture : fboTex[(i - 1) % 2]);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, i == first ? texture : fboTex[(i - 1) % 2]);
             int filter = p.linear ? GLES20.GL_LINEAR : GLES20.GL_NEAREST;
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
@@ -285,7 +295,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glUseProgram(p.program);
             // first pass reads the game texture; later ones the previous pass, on the game's pixel grid
-            float tw = i == 0 ? texW : gw, th = i == 0 ? texH : gh;
+            float tw = i == first ? texW : gw, th = i == first ? texH : gh;
             if (p.uTexel >= 0) GLES20.glUniform2f(p.uTexel, 1f / tw, 1f / th);
             if (p.uPixel >= 0) GLES20.glUniform2f(p.uPixel, 1f / r.width(), 1f / r.height());
             if (p.uTexSize >= 0) GLES20.glUniform2f(p.uTexSize, tw, th);
@@ -294,7 +304,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (p.uMvp >= 0) GLES20.glUniformMatrix4fv(p.uMvp, 1, false, IDENTITY, 0);
             if (p.uFrame >= 0) GLES20.glUniform1i(p.uFrame, frameCount);
             if (p.uDir >= 0) GLES20.glUniform1i(p.uDir, 1);
-            FloatBuffer q = i == 0 ? quad : fboQuad;
+            FloatBuffer q = i == first ? quad : fboQuad;
             q.position(0);
             GLES20.glVertexAttribPointer(p.aPos, 2, GLES20.GL_FLOAT, false, 16, q);
             GLES20.glEnableVertexAttribArray(p.aPos);
@@ -318,13 +328,25 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         fboH = h;
         GLES20.glGenFramebuffers(2, fbo, 0);
         GLES20.glGenTextures(2, fboTex, 0);
+        targetsOk = true;
         for (int i = 0; i < 2; i++) {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, fboTex[i]);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0, GLES20.GL_RGBA,
                     GLES20.GL_UNSIGNED_BYTE, null);
+            // Mali/Adreno reject a target whose texture still has the default mipmap filter
+            // (incomplete framebuffer: nothing is drawn and the screen stays black)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo[i]);
             GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
                     GLES20.GL_TEXTURE_2D, fboTex[i], 0);
+            int st = GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER);
+            if (st != GLES20.GL_FRAMEBUFFER_COMPLETE) {
+                Log.w(TAG, "Render target not supported (" + st + "): only the last filter is drawn");
+                targetsOk = false;
+            }
         }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
     }

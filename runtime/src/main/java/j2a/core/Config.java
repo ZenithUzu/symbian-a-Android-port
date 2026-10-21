@@ -29,13 +29,14 @@ public final class Config {
     /** On-screen gamepad size in %. */
     public int padScale = 100;
     /**
-     * Game key each control sends (-5 = OK, 53 = key 5...; 0 = nothing). Ids: a b x y l r select start,
-     * d-pad du dd dl dr, joystick su sd sl sr; physical gamepad only: l2 r2 l3 r3, right stick ru rd rl rr.
-     * Missing ids use DEFAULT_PAD_MAP, so a player's map from an older version still works.
+     * Game key each control sends (-5 = OK, 53 = key 5...; 0 = nothing). On-screen ids: a b x y l r select
+     * start, d-pad du dd dl dr, joystick su sd sl sr. A physical gamepad has its own ids, the same with a
+     * "p" in front (pa, pdu, psu...) plus pl2 pr2 pl3 pr3 and the right stick pru prd prl prr, so both
+     * are mapped independently. Ids not in the map use the defaults (a physical one: its on-screen twin's).
      */
     public String padMap = DEFAULT_PAD_MAP;
     public static final String DEFAULT_PAD_MAP = "a=-5,b=55,x=57,y=48,l=42,r=35,select=-6,start=-7,"
-            + "du=-1,dd=-2,dl=-3,dr=-4,su=-1,sd=-2,sl=-3,sr=-4,l2=49,r2=51,l3=53,r3=48,ru=50,rd=56,rl=52,rr=54";
+            + "du=-1,dd=-2,dl=-3,dr=-4,su=-1,sd=-2,sl=-3,sr=-4,pl2=49,pr2=51,pl3=53,pr3=48,pru=50,prd=56,prl=52,prr=54";
     public String padHide = "";
     /** Game image centered on the whole screen; the controls float over the side margins. */
     public boolean center = true;
@@ -107,6 +108,7 @@ public final class Config {
     public int padCode(String id) {
         Integer v = lookup(padMap, id);
         if (v == null) v = lookup(DEFAULT_PAD_MAP, id);
+        if (v == null && id.startsWith("p")) v = lookup(DEFAULT_PAD_MAP, id.substring(1)); // auto-map: as on screen
         return v == null ? 0 : v;
     }
 
