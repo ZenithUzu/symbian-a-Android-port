@@ -171,15 +171,17 @@ def main(argv=None):
                    help="fit: proporción original; integer: pixel perfect; wide: 16:9 (llena casi toda la "
                         "pantalla deformando poco); stretch: llenar todo")
     s.add_argument("--filter", action="store_true", help="atajo de --shader smooth")
-    s.add_argument("--shader", help="shader por defecto: nearest, smooth, sharp, scanlines, lcd, crt, mono "
+    s.add_argument("--shader", help="filtros: nearest, sharp, smooth, xbr, mmpx, aann; efectos encima con + "
+                   "(crt, crt-lottes, scanlines, lcd, dot, mono), p. ej. xbr+crt-lottes. "
                                     "o file:<sección .ini de --shaders>")
     s.add_argument("--shaders", help="carpeta con shaders formato PPSSPP (.ini/.fsh/.vsh) para incluir en el APK")
     s.add_argument("--fps-mode", choices=["vsync", "dynamic", "unlimited"], default="vsync",
                    help="vsync: sincronizado; dynamic: la pantalla adapta sus Hz a los FPS del juego")
     s.add_argument("--keep-j2me-packages", action="store_true",
                    help="no renombrar javax.microedition.* al paquete propio del motor del port")
-    s.add_argument("--keypad", choices=["full", "minimal", "none"],
-                   help="por defecto se decide según el juego (los táctiles preguntan al jugador)")
+    s.add_argument("--keypad", choices=["gamepad", "full", "minimal", "none"],
+                   help="gamepad = mando (por defecto), full = teclado del teléfono; los táctiles preguntan")
+    s.add_argument("--pad-style", choices=["xbox", "play", "arcade"], default="xbox", help="botones del mando")
     s.add_argument("--fps", type=int, default=0, help="límite de FPS (0 = sin límite)")
     s.add_argument("--platform", default="Nokia6300/07.21", help="valor de microedition.platform")
     s.add_argument("--force", action="store_true", help="sobrescribir la carpeta de salida")

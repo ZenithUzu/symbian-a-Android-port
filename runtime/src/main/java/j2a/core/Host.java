@@ -495,16 +495,14 @@ public final class Host {
             final java.util.List<String> labels = new java.util.ArrayList<>();
             final java.util.List<Runnable> actions = new java.util.ArrayList<>();
             java.util.function.BiConsumer<String, Runnable> item = (l, r) -> { labels.add(l); actions.add(r); };
-            final java.util.List<Shaders.Def> shaders = Shaders.all(activity);
-            String shaderName = cfg.shader;
-            for (Shaders.Def d : shaders) if (d.id.equals(cfg.shader)) shaderName = d.label;
 
             item.accept("▶ Continuar", () -> {});
             item.accept("Tecla izquierda del juego (menú / aceptar)", () -> tapKey(Keys.SOFT_LEFT));
             item.accept("Tecla derecha del juego (atrás / pausa)", () -> tapKey(Keys.SOFT_RIGHT));
             item.accept("Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight, Host::pickResolution);
-            item.accept("Rotación: " + (cfg.orientation.length() == 0 ? "la del juego" : cfg.orientation), () ->
-                    pick("Rotación", new String[]{"Automática", "Vertical", "Horizontal"},
+            item.accept("Rotación: " + (cfg.orientation.length() == 0 || "auto".equals(cfg.orientation) ? "la del teléfono"
+                    : "portrait".equals(cfg.orientation) ? "vertical" : "horizontal"), () ->
+                    pick("Rotación", new String[]{"La del teléfono (girar libremente)", "Siempre vertical", "Siempre horizontal"},
                             new String[]{"auto", "portrait", "landscape"}, cfg.orientation,
                             () -> applyOrientation(activity, cfg.orientation), "orientation"));
             item.accept("Girar imagen del juego: " + (cfg.rotate < 0 ? "automático (" + rotation() + "°)"
@@ -520,14 +518,7 @@ public final class Host {
                     pick("Pantalla", new String[]{"Proporción original del juego", "Pixel perfect (escalado entero)",
                                     "16:9 (usa casi toda la pantalla, deforma poco)", "Completa (estira hasta llenar todo)"},
                             new String[]{"fit", "integer", "wide", "stretch"}, cfg.scaleMode, null, "scale"));
-            item.accept("Shader: " + shaderName, () -> {
-                String[] ls = new String[shaders.size()], ids = new String[shaders.size()];
-                for (int i = 0; i < ids.length; i++) {
-                    ls[i] = shaders.get(i).label;
-                    ids[i] = shaders.get(i).id;
-                }
-                pick("Shader", ls, ids, cfg.shader, null, "shader");
-            });
+            item.accept("Filtros: " + Shaders.label(activity, cfg.shader), Host::pickFilters);
             item.accept("Modo de FPS: " + cfg.fpsMode, () ->
                     pick("Modo de FPS", new String[]{"Sincronizado con la pantalla (vsync)",
                                     "Dinámico (la pantalla se adapta a los FPS del juego)", "Sin límite"},
@@ -539,14 +530,8 @@ public final class Host {
             item.accept("Mostrar FPS: " + (cfg.showFps ? "sí" : "no"), () -> toggle(() -> cfg.showFps = !cfg.showFps));
             item.accept("Anti-parpadeo (mezclar fotogramas): " + (cfg.frameBlend ? "sí" : "no"),
                     () -> toggle(() -> cfg.frameBlend = !cfg.frameBlend));
-            item.accept("Teclado virtual: " + ("none".equals(cfg.keypad) ? "oculto (solo táctil)"
-                    : "minimal".equals(cfg.keypad) ? "cruceta + OK" : "completo"), () ->
-                    pick("Teclado virtual", new String[]{"Completo", "Cruceta + OK", "Oculto"},
-                            new String[]{"full", "minimal", "none"}, cfg.keypad, null, "keypad"));
-            item.accept("Opacidad del teclado: " + (cfg.keypadAlpha * 100 / 255) + "%", () ->
-                    pick("Opacidad del teclado", new String[]{"25%", "50%", "75%", "100%"},
-                            new String[]{"64", "128", "192", "255"}, String.valueOf(cfg.keypadAlpha), null, "alpha"));
-            item.accept("Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"), () -> toggle(() -> cfg.haptics = !cfg.haptics));
+            item.accept("Controles…", Host::showControlsMenu);
+            item.accept("Centrar imagen: " + (cfg.center ? "sí" : "no"), () -> toggle(() -> cfg.center = !cfg.center));
             item.accept("Sonido: " + (cfg.sound ? "sí" : "no"), () -> toggle(() -> {
                 cfg.sound = !cfg.sound;
                 if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
@@ -568,6 +553,138 @@ public final class Host {
                     .setItems(labels.toArray(new String[0]), (dlg, which) -> actions.get(which).run())
                     .show();
         });
+    }
+
+    private static final String[] PAD_TYPES = {"gamepad:xbox", "gamepad:play", "gamepad:arcade", "full", "minimal", "none"};
+    private static final String[] PAD_TYPE_LABELS = {"Mando estilo Xbox (A B X Y)", "Mando estilo PlayStation (✕ ○ □ △)",
+            "Mando arcade (6 botones)", "Teclado del teléfono (números)", "Cruceta + OK", "Ocultos (solo táctil)"};
+
+    /** Everything about the on-screen controls, in its own list so the main menu stays short. */
+    static void showControlsMenu() {
+        final java.util.List<String> labels = new java.util.ArrayList<>();
+        final java.util.List<Runnable> actions = new java.util.ArrayList<>();
+        java.util.function.BiConsumer<String, Runnable> item = (l, r) -> { labels.add(l); actions.add(r); };
+        String type = "gamepad".equals(cfg.keypad) ? "gamepad:" + cfg.padStyle : cfg.keypad;
+        int ti = java.util.Arrays.asList(PAD_TYPES).indexOf(type);
+        item.accept("Tipo: " + (ti >= 0 ? PAD_TYPE_LABELS[ti] : type), () ->
+                pick("Tipo de controles", PAD_TYPE_LABELS, PAD_TYPES, type, null, "padType"));
+        item.accept("Dirección: " + (cfg.padStick ? "joystick" : "cruceta"),
+                () -> toggle(() -> cfg.padStick = !cfg.padStick));
+        item.accept("Asignar teclas del juego a los botones", Host::assignPadKeys);
+        item.accept("Mostrar u ocultar botones", Host::pickHiddenButtons);
+        item.accept("Mover controles (arrastrar)", () -> view.startEditing());
+        item.accept("Devolver los controles a su sitio", () -> view.resetPositions());
+        item.accept("Tamaño: " + cfg.padScale + "%", () ->
+                pick("Tamaño de los controles", new String[]{"70%", "85%", "100%", "115%", "130%", "150%"},
+                        new String[]{"70", "85", "100", "115", "130", "150"}, String.valueOf(cfg.padScale), null, "padScale"));
+        item.accept("Opacidad: " + (cfg.keypadAlpha * 100 / 255) + "%", () ->
+                pick("Opacidad de los controles", new String[]{"10%", "25%", "50%", "75%", "100%"},
+                        new String[]{"26", "64", "128", "192", "255"}, String.valueOf(cfg.keypadAlpha), null, "alpha"));
+        item.accept("Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"), () -> toggle(() -> cfg.haptics = !cfg.haptics));
+        item.accept("Vibración del juego: " + (cfg.vibration ? "sí" : "no"), () -> toggle(() -> {
+            cfg.vibration = !cfg.vibration;
+            if (cfg.vibration) vibrate(120); // so the player feels it works
+        }));
+        new AlertDialog.Builder(activity)
+                .setTitle("Controles")
+                .setItems(labels.toArray(new String[0]), (dlg, which) -> actions.get(which).run())
+                .show();
+    }
+
+    private static final String[] PAD_IDS = {"a", "b", "x", "y", "c", "z"};
+
+    /** Buttons of the current style: ids and names as drawn. */
+    private static String[][] padButtons() {
+        if ("arcade".equals(cfg.padStyle)) return new String[][]{PAD_IDS, {"A", "B", "X", "Y", "C", "Z"}};
+        if ("play".equals(cfg.padStyle)) return new String[][]{{"a", "b", "x", "y"}, {"✕", "○", "□", "△"}};
+        return new String[][]{{"a", "b", "x", "y"}, {"A", "B", "X", "Y"}};
+    }
+
+    /** Button -> game key (the phone key the game expects for that action). */
+    private static void assignPadKeys() {
+        final String[][] pb = padButtons();
+        String[] ls = new String[pb[0].length];
+        for (int i = 0; i < ls.length; i++) ls[i] = pb[1][i] + "  →  tecla " + ScreenView.keyLabel(cfg.padCode(pb[0][i]));
+        new AlertDialog.Builder(activity)
+                .setTitle("¿Qué botón quieres cambiar?")
+                .setItems(ls, (dlg, which) -> {
+                    final String[] names = {"5", "OK (centro)", "0", "1", "2", "3", "4", "6", "7", "8", "9", "*", "#",
+                            "▲", "▼", "◀", "▶", "Tecla izquierda", "Tecla derecha"};
+                    final int[] codes = {Keys.NUM5, Keys.FIRE, Keys.NUM0, Keys.NUM1, Keys.NUM2, Keys.NUM3, Keys.NUM4,
+                            Keys.NUM6, Keys.NUM7, Keys.NUM8, Keys.NUM9, Keys.STAR, Keys.POUND, Keys.UP, Keys.DOWN,
+                            Keys.LEFT, Keys.RIGHT, Keys.SOFT_LEFT, Keys.SOFT_RIGHT};
+                    int cur = -1;
+                    for (int i = 0; i < codes.length; i++) if (codes[i] == cfg.padCode(pb[0][which])) cur = i;
+                    new AlertDialog.Builder(activity)
+                            .setTitle("Botón " + pb[1][which] + " envía la tecla…")
+                            .setSingleChoiceItems(names, cur, (d2, k) -> {
+                                d2.dismiss();
+                                cfg.setPadCode(pb[0][which], codes[k]);
+                                settingsChanged();
+                            })
+                            .show();
+                })
+                .show();
+    }
+
+    /** Hide buttons a game doesn't use (or the d-pad, Select/Start, the 123 switch). */
+    private static void pickHiddenButtons() {
+        String[][] pb = padButtons();
+        final java.util.List<String> ids = new java.util.ArrayList<>(java.util.Arrays.asList(pb[0]));
+        final java.util.List<String> names = new java.util.ArrayList<>(java.util.Arrays.asList(pb[1]));
+        ids.addAll(java.util.Arrays.asList("dir", "select", "start", "toggle"));
+        names.addAll(java.util.Arrays.asList("Cruceta / joystick", "Select (tecla izquierda)", "Start (tecla derecha)",
+                "Botón 123 (teclado numérico)"));
+        final boolean[] shown = new boolean[ids.size()];
+        for (int i = 0; i < shown.length; i++) shown[i] = !cfg.padHidden(ids.get(i));
+        new AlertDialog.Builder(activity)
+                .setTitle("Botones visibles")
+                .setMultiChoiceItems(names.toArray(new String[0]), shown, (d, i, v) -> shown[i] = v)
+                .setPositiveButton("Aplicar", (d, x) -> {
+                    StringBuilder b = new StringBuilder();
+                    for (int i = 0; i < shown.length; i++) if (!shown[i]) b.append(b.length() > 0 ? "," : "").append(ids.get(i));
+                    cfg.padHide = b.toString();
+                    settingsChanged();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    /** Filters: one scaler, then any number of effects drawn on top of it, in list order. */
+    private static void pickFilters() {
+        final java.util.List<Shaders.Def> scalers = new java.util.ArrayList<>(), effects = new java.util.ArrayList<>();
+        for (Shaders.Def d : Shaders.all(activity)) (d.scaler ? scalers : effects).add(d);
+        final java.util.List<String> cur = java.util.Arrays.asList(cfg.shader.split("\\+"));
+        String[] sl = new String[scalers.size()];
+        int checked = 0;
+        for (int i = 0; i < sl.length; i++) {
+            sl[i] = scalers.get(i).label;
+            if (cur.contains(scalers.get(i).id)) checked = i;
+        }
+        new AlertDialog.Builder(activity)
+                .setTitle("Filtros 1/2: cómo se agrandan los píxeles")
+                .setSingleChoiceItems(sl, checked, (dlg, which) -> {
+                    dlg.dismiss();
+                    final boolean[] on = new boolean[effects.size()];
+                    String[] el = new String[on.length];
+                    for (int i = 0; i < on.length; i++) {
+                        el[i] = effects.get(i).label;
+                        on[i] = cur.contains(effects.get(i).id);
+                    }
+                    new AlertDialog.Builder(activity)
+                            .setTitle("Filtros 2/2: efectos encima (puedes juntar varios)")
+                            .setMultiChoiceItems(el, on, (d2, i, v) -> on[i] = v)
+                            .setPositiveButton("Aplicar", (d2, x) -> {
+                                StringBuilder b = new StringBuilder(scalers.get(which).id);
+                                for (int i = 0; i < on.length; i++) if (on[i]) b.append('+').append(effects.get(i).id);
+                                cfg.shader = b.toString();
+                                gl.requestRender();
+                                settingsChanged();
+                            })
+                            .setNegativeButton("Cancelar", null)
+                            .show();
+                })
+                .show();
     }
 
     /** Presses and releases a game key (menu shortcuts for the soft keys). */
@@ -600,7 +717,7 @@ public final class Host {
                                 + "virtual del teléfono? (Puedes cambiarlo luego en el menú: gesto o botón Atrás.)")
                         .setPositiveButton("Sí, mostrar teclado", new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface d, int w) {
-                                if ("none".equals(cfg.keypad)) cfg.keypad = "full";
+                                if ("none".equals(cfg.keypad)) cfg.keypad = "gamepad";
                                 settingsChanged();
                             }
                         })
@@ -638,6 +755,11 @@ public final class Host {
                         else if (field.equals("shader")) { cfg.shader = v; gl.requestRender(); }
                         else if (field.equals("fpsMode")) cfg.fpsMode = v;
                         else if (field.equals("alpha")) cfg.keypadAlpha = Integer.parseInt(v);
+                        else if (field.equals("padScale")) cfg.padScale = Integer.parseInt(v);
+                        else if (field.equals("padType")) {
+                            cfg.keypad = v.startsWith("gamepad:") ? "gamepad" : v;
+                            if (v.startsWith("gamepad:")) cfg.padStyle = v.substring(8);
+                        }
                         else if (field.equals("rotate")) cfg.rotate = Integer.parseInt(v);
                         if (after != null) after.run();
                         settingsChanged();
@@ -745,8 +867,18 @@ public final class Host {
         try {
             Vibrator v = (Vibrator) activity.getSystemService(Activity.VIBRATOR_SERVICE);
             if (v == null || !v.hasVibrator()) return false;
-            if (ms <= 0) v.cancel();
-            else v.vibrate(ms);
+            if (ms <= 0) {
+                v.cancel();
+            } else if (Build.VERSION.SDK_INT >= 26) {
+                // Android 12+ (and HyperOS/One UI) mute or weaken "unknown" vibrations: say it's a game.
+                // Phone motors were strong; under ~40 ms a modern linear motor is barely felt.
+                v.vibrate(android.os.VibrationEffect.createOneShot(Math.max(40, ms),
+                                android.os.VibrationEffect.DEFAULT_AMPLITUDE),
+                        new android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_GAME).build());
+            } else {
+                v.vibrate(Math.max(40, ms));
+            }
             return true;
         } catch (Throwable t) {
             return false;

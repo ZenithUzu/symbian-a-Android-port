@@ -177,6 +177,8 @@ def copy_engine(dst, engine_pkg, renamed, modules):
                 with io.open(os.path.join(d, f), encoding="utf-8") as fh:
                     text = fh.read()
                 _write_text(os.path.join(dst, "src", "main", "java", ren(rel)), ren(text))
+    shutil.copytree(os.path.join(rt, "src", "main", "assets"), os.path.join(dst, "src", "main", "assets"),
+                    dirs_exist_ok=True)  # bundled filters (shaders-retro/)
     for name in ("NOTICE-M3G.md",):
         shutil.copyfile(os.path.join(paths.m3g_dir(), name), os.path.join(dst, name))
     shutil.copyfile(os.path.join(paths.extra_dir(), "NOTICE-EXTRA.md"), os.path.join(dst, "NOTICE-EXTRA.md"))
@@ -241,15 +243,15 @@ def rename_sources(root, remap):
 
 
 def copy_shaders(src_dir, assets_dir):
-    """Copies PPSSPP-format shaders (.ini/.fsh/.vsh) into the APK assets."""
+    """Copies PPSSPP (.ini/.fsh/.vsh) and RetroArch (.glsl) shaders into the APK assets."""
     if not src_dir:
         return 0
     os.makedirs(assets_dir, exist_ok=True)
     n = 0
     for f in os.listdir(src_dir):
-        if f.lower().endswith((".ini", ".fsh", ".vsh")):
+        if f.lower().endswith((".ini", ".fsh", ".vsh", ".glsl")):
             shutil.copyfile(os.path.join(src_dir, f), os.path.join(assets_dir, f))
-            n += f.lower().endswith(".ini")
+            n += f.lower().endswith((".ini", ".glsl"))
     return n
 
 
@@ -303,7 +305,8 @@ def port(args):
         app_name = args.name or suite.name
 
     sw, sh, why = pick_screen(args, report)
-    orientation = args.orientation or report["orientation_hint"] or ("landscape" if sw > sh else "portrait")
+    # the phone's own rotation unless asked: the image adapts to either (--orientation to lock it)
+    orientation = args.orientation or "auto"
     package = args.package or official_package(suite, midlet_class)
     if not re.match(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$", package):
         raise SystemExit("Nombre de paquete inválido: %s" % package)
@@ -464,7 +467,7 @@ def port(args):
                 "Atributos del MANIFEST.MF/JAD (MIDlet.getAppProperty los lee de aquí)")
     hint_mode, hint_ask = report["keypad_hint"]
     args.keypad_ask = not args.keypad and hint_ask
-    args.keypad = args.keypad or hint_mode or "full"
+    args.keypad = args.keypad or hint_mode or "gamepad"
     write_props(os.path.join(assets, "port.properties"), _port_items(midlet_class, sw, sh, args),
                 "Configuración del port (editable). El jugador puede cambiar algunas opciones\n"
                 "desde el menú del port (gesto o botón Atrás).")
@@ -500,12 +503,23 @@ def _port_items(midlet_class, sw, sh, args):
         ("auto.fit", "true"),
         ("# -1 = detectar al jugar | 0 = no girar | 90 / 270 = el juego dibuja de lado", None),
         ("rotate", -1 if args.rotate is None else args.rotate),
-        ("# nearest | smooth | sharp | scanlines | lcd | crt | mono | file:<sección de assets/shaders/*.ini>", None),
+        ("# Filtros: uno de escalado (nearest | sharp | smooth | xbr | mmpx | aann) y efectos encima con +", None),
+        ("# (crt | crt-lottes | scanlines | lcd | dot | mono | file:<sección .ini> | retro:<archivo .glsl>), p. ej. xbr+crt-lottes", None),
         ("shader", args.shader or ("smooth" if args.filter else "nearest")),
         ("# vsync = sincronizado | dynamic = la pantalla adapta su Hz a los FPS del juego | unlimited", None),
         ("fps.mode", args.fps_mode),
-        ("# full = cruceta + teclado numérico | minimal = cruceta + OK | none", None),
+        ("# gamepad = mando (cruceta + botones + Select/Start) | full = teclado del teléfono | minimal | none", None),
         ("keypad", args.keypad),
+        ("# Mando: xbox | play | arcade, joystick en vez de cruceta, tamaño en %", None),
+        ("pad.style", getattr(args, "pad_style", None) or "xbox"),
+        ("pad.stick", "false"),
+        ("pad.scale", 100),
+        ("# Tecla del juego que manda cada botón (-5 = OK, 53 = tecla 5, 48 = 0, 42 = *, 35 = #)", None),
+        ("pad.map", "a=-5,b=55,x=57,y=48,c=42,z=35"),
+        ("# Botones ocultos: a,b,x,y,c,z,dir,select,start,toggle", None),
+        ("pad.hide", ""),
+        ("# true = imagen centrada en toda la pantalla (los controles quedan encima de los bordes)", None),
+        ("center", "true"),
         ("# true = la primera vez el APK pregunta si mostrar el teclado (juegos con controles táctiles)", None),
         ("keypad.ask", "true" if args.keypad_ask else "false"),
         ("keypad.alpha", 150),

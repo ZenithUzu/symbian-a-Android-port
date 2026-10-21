@@ -144,7 +144,7 @@ def keypad_hint(attrs, touch):
     if v == "no":
         return "none", False  # the game draws its own touch controls
     if v in ("gameactions", "navigationkeys"):
-        return "minimal", False
+        return "gamepad", False  # only d-pad and action keys
     if (attrs.get("MIDlet-Touch-Support") or "").strip().lower() == "true" or touch:
         return None, True  # touch-aware: may or may not need keys -> let the player choose
     return None, False

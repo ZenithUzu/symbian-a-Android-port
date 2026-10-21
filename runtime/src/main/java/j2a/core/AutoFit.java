@@ -6,7 +6,7 @@ import android.graphics.Rect;
  * Automatic resolution fit. Many J2ME games were built for one fixed screen (e.g. 176x208)
  * and only draw that area even when the screen is bigger. This watches what the game really
  * draws on the screen buffer and, once it clearly matches a classic phone resolution, shows
- * only that area (scaled to fill the display) and turns the device to its orientation.
+ * only that area (scaled to fill the display). The phone's own rotation decides the orientation.
  *
  * It never changes what the game sees (getWidth/getHeight stay the same), so it can't break
  * a game: at worst the full screen is shown, as before. The result is remembered per game.
@@ -61,7 +61,6 @@ public final class AutoFit {
         int[] wh = parse(saved);
         if (wh != null && wh[0] + wh[2] <= screenW && wh[1] + wh[3] <= screenH) {
             fit = new Rect(wh[0], wh[1], wh[0] + wh[2], wh[1] + wh[3]);
-            orient();
         }
         tracking = true;
     }
@@ -179,18 +178,7 @@ public final class AutoFit {
         }
         Settings.saveFit(Host.activity, screenW, screenH,
                 f == null ? "none" : f.left + "," + f.top + "," + f.width() + "x" + f.height());
-        orient();
         Host.relayout();
-    }
-
-    /** Rotates to the fitted area's orientation unless the player chose one. */
-    private static void orient() {
-        if (Host.cfg.orientation.length() > 0 || Host.rotation() != 0 || Host.activity == null) return;
-        Rect a = area();
-        final String o = a.width() > a.height() ? "landscape" : "portrait";
-        Host.runOnUi(new Runnable() {
-            public void run() { Host.applyOrientation(Host.activity, o); }
-        });
     }
 
     /**

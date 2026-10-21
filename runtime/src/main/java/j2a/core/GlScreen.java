@@ -43,11 +43,21 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     private final Rect drawRect = new Rect();
     private int viewW, viewH;
 
-    private int program, texture = -1, texW, texH;
+    private int texture = -1, texW, texH;
     private String loadedShader;
-    private boolean linear;
-    private int aPos, aTex, uTexel, uPixel, uSampler;
+    /** One compiled filter of the chain (see Shaders): j2a/PPSSPP and RetroArch names both looked up. */
+    private static final class Pass {
+        int program, aPos, aTex, uTexel, uPixel, uMvp, uTexSize, uInSize, uOutSize, uFrame, uDir;
+        boolean linear;
+    }
+    private final java.util.ArrayList<Pass> passes = new java.util.ArrayList<Pass>();
+    /** Ping-pong render targets between passes (output size), recreated when the size changes. */
+    private final int[] fbo = new int[2], fboTex = new int[2];
+    private int fboW, fboH, frameCount;
+    private static final float[] IDENTITY = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
     private final FloatBuffer quad;
+    /** Quad for reading a render target: v = 0 is its bottom row. */
+    private final FloatBuffer fboQuad;
 
     private final Object paceLock = new Object();
     private long nextFrameNs;
@@ -67,6 +77,9 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         float[] q = {-1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0, 1, 1, 1, 0};
         quad = ByteBuffer.allocateDirect(q.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         quad.put(q).position(0);
+        float[] f = {-1, -1, 0, 0, 1, -1, 1, 0, -1, 1, 0, 1, 1, 1, 1, 1};
+        fboQuad = ByteBuffer.allocateDirect(f.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+        fboQuad.put(f).position(0);
     }
 
     /** Where (in view pixels) the game image goes; set by the keypad overlay layout. */
@@ -211,6 +224,8 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         texture = t[0];
         texW = texH = 0;
         loadedShader = null;
+        passes.clear(); // the old context's programs and targets are gone
+        fboW = fboH = 0;
         synchronized (lock) { dirty = staging != null; }
     }
 
@@ -246,27 +261,72 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             pending = false;
             lock.notifyAll();
         }
-        if (r.isEmpty() || program == 0) return;
-        int filter = linear ? GLES20.GL_LINEAR : GLES20.GL_NEAREST;
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glViewport(r.left, viewH - r.bottom, r.width(), r.height());
-        GLES20.glUseProgram(program);
-        if (uSampler >= 0) GLES20.glUniform1i(uSampler, 0);
-        if (uTexel >= 0) GLES20.glUniform2f(uTexel, 1f / texW, 1f / texH);
-        if (uPixel >= 0) GLES20.glUniform2f(uPixel, 1f / r.width(), 1f / r.height());
+        if (r.isEmpty() || passes.isEmpty()) return;
+        frameCount++;
         setTexCoords(AutoFit.area());
-        quad.position(0);
-        GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 16, quad);
-        GLES20.glEnableVertexAttribArray(aPos);
-        quad.position(2);
-        if (aTex >= 0) {
-            GLES20.glVertexAttribPointer(aTex, 2, GLES20.GL_FLOAT, false, 16, quad);
-            GLES20.glEnableVertexAttribArray(aTex);
+        int n = passes.size();
+        if (n > 1) ensureTargets(r.width(), r.height());
+        // game pixels in screen orientation: what effects after the first pass line up with
+        Rect a = AutoFit.area();
+        boolean turned = Host.rotation() == 90 || Host.rotation() == 270;
+        float gw = turned ? a.height() : a.width(), gh = turned ? a.width() : a.height();
+        for (int i = 0; i < n; i++) {
+            Pass p = passes.get(i);
+            boolean last = i == n - 1;
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, last ? 0 : fbo[i % 2]);
+            if (last) GLES20.glViewport(r.left, viewH - r.bottom, r.width(), r.height());
+            else GLES20.glViewport(0, 0, r.width(), r.height());
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, i == 0 ? texture : fboTex[(i - 1) % 2]);
+            int filter = p.linear ? GLES20.GL_LINEAR : GLES20.GL_NEAREST;
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glUseProgram(p.program);
+            // first pass reads the game texture; later ones the previous pass, on the game's pixel grid
+            float tw = i == 0 ? texW : gw, th = i == 0 ? texH : gh;
+            if (p.uTexel >= 0) GLES20.glUniform2f(p.uTexel, 1f / tw, 1f / th);
+            if (p.uPixel >= 0) GLES20.glUniform2f(p.uPixel, 1f / r.width(), 1f / r.height());
+            if (p.uTexSize >= 0) GLES20.glUniform2f(p.uTexSize, tw, th);
+            if (p.uInSize >= 0) GLES20.glUniform2f(p.uInSize, tw, th);
+            if (p.uOutSize >= 0) GLES20.glUniform2f(p.uOutSize, r.width(), r.height());
+            if (p.uMvp >= 0) GLES20.glUniformMatrix4fv(p.uMvp, 1, false, IDENTITY, 0);
+            if (p.uFrame >= 0) GLES20.glUniform1i(p.uFrame, frameCount);
+            if (p.uDir >= 0) GLES20.glUniform1i(p.uDir, 1);
+            FloatBuffer q = i == 0 ? quad : fboQuad;
+            q.position(0);
+            GLES20.glVertexAttribPointer(p.aPos, 2, GLES20.GL_FLOAT, false, 16, q);
+            GLES20.glEnableVertexAttribArray(p.aPos);
+            if (p.aTex >= 0) {
+                q.position(2);
+                GLES20.glVertexAttribPointer(p.aTex, 2, GLES20.GL_FLOAT, false, 16, q);
+                GLES20.glEnableVertexAttribArray(p.aTex);
+            }
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         }
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    /** Two textures of the output size to render the passes before the last one into. */
+    private void ensureTargets(int w, int h) {
+        if (w == fboW && h == fboH) return;
+        if (fboW != 0) {
+            GLES20.glDeleteFramebuffers(2, fbo, 0);
+            GLES20.glDeleteTextures(2, fboTex, 0);
+        }
+        fboW = w;
+        fboH = h;
+        GLES20.glGenFramebuffers(2, fbo, 0);
+        GLES20.glGenTextures(2, fboTex, 0);
+        for (int i = 0; i < 2; i++) {
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, fboTex[i]);
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0, GLES20.GL_RGBA,
+                    GLES20.GL_UNSIGNED_BYTE, null);
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo[i]);
+            GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                    GLES20.GL_TEXTURE_2D, fboTex[i], 0);
+        }
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
     }
 
     /** Shows only the given part of the game texture (AutoFit). */
@@ -282,23 +342,37 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
         for (int i = 0; i < 4; i++) quad.put(i * 4 + 2, c[i][0]).put(i * 4 + 3, c[i][1]);
     }
 
-    private void loadShader(String id) {
-        loadedShader = id;
-        Shaders.Def d = Shaders.find(getContext(), id);
-        int p = link(d.vertex, d.fragment);
-        if (p == 0 && !"nearest".equals(d.id)) {
-            Log.w(TAG, "Shader '" + id + "' failed, using 'nearest'");
-            d = Shaders.builtIn("nearest");
-            p = link(d.vertex, d.fragment);
+    private void loadShader(String spec) {
+        loadedShader = spec;
+        for (Pass p : passes) GLES20.glDeleteProgram(p.program);
+        passes.clear();
+        for (Shaders.Def d : Shaders.chain(getContext(), spec)) {
+            int prog = link(d.vertex, d.fragment);
+            if (prog == 0) {
+                Log.w(TAG, "Shader '" + d.id + "' failed, skipped");
+                continue;
+            }
+            Pass p = new Pass();
+            p.program = prog;
+            p.linear = d.linear;
+            p.aPos = attrib(prog, "a_position", "VertexCoord");
+            p.aTex = attrib(prog, "a_texcoord0", "TexCoord");
+            p.uTexel = GLES20.glGetUniformLocation(prog, "u_texelDelta");
+            p.uPixel = GLES20.glGetUniformLocation(prog, "u_pixelDelta");
+            p.uMvp = GLES20.glGetUniformLocation(prog, "MVPMatrix");
+            p.uTexSize = GLES20.glGetUniformLocation(prog, "TextureSize");
+            p.uInSize = GLES20.glGetUniformLocation(prog, "InputSize");
+            p.uOutSize = GLES20.glGetUniformLocation(prog, "OutputSize");
+            p.uFrame = GLES20.glGetUniformLocation(prog, "FrameCount");
+            p.uDir = GLES20.glGetUniformLocation(prog, "FrameDirection");
+            passes.add(p); // samplers (sampler0, Texture, decal...) default to texture unit 0
         }
-        if (program != 0) GLES20.glDeleteProgram(program);
-        program = p;
-        linear = d.linear;
-        aPos = GLES20.glGetAttribLocation(p, "a_position");
-        aTex = GLES20.glGetAttribLocation(p, "a_texcoord0");
-        uTexel = GLES20.glGetUniformLocation(p, "u_texelDelta");
-        uPixel = GLES20.glGetUniformLocation(p, "u_pixelDelta");
-        uSampler = GLES20.glGetUniformLocation(p, "sampler0");
+        if (passes.isEmpty() && !"nearest".equals(spec)) loadShader("nearest");
+    }
+
+    private static int attrib(int prog, String a, String b) {
+        int l = GLES20.glGetAttribLocation(prog, a);
+        return l >= 0 ? l : GLES20.glGetAttribLocation(prog, b);
     }
 
     private static int link(String vs, String fs) {

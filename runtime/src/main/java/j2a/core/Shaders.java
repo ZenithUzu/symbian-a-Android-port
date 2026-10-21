@@ -8,12 +8,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Post-processing shaders. The built-in ones are original code; extra shaders in
- * PPSSPP's format (.ini + .fsh [+ .vsh], e.g. github.com/jdgleaver/ppsspp_shaders)
- * can be dropped into assets/shaders/ and show up in the port menu.
+ * Post-processing filters, chained: one scaler ("nearest", "xbr"...) then any number of effects
+ * ("crt", "scanlines"...), written in Config.shader as "xbr+crt-lottes".
  *
- * Interface (same as PPSSPP): attributes a_position, a_texcoord0; varying v_texcoord0;
- * uniforms sampler0, u_texelDelta (1/game size), u_pixelDelta (1/output size).
+ * Three shader formats:
+ *  - built-in (original code) and PPSSPP (.ini + .fsh [+ .vsh] in assets/shaders/): attributes
+ *    a_position, a_texcoord0; uniforms sampler0, u_texelDelta (1/game size), u_pixelDelta (1/output size);
+ *  - RetroArch single-file .glsl (github.com/libretro/glsl-shaders; bundled ones in assets/shaders-retro/,
+ *    more can be dropped into assets/shaders/): VertexCoord, TexCoord, MVPMatrix, Texture, TextureSize,
+ *    InputSize, OutputSize, FrameCount, compiled once with VERTEX and once with FRAGMENT defined.
  */
 public final class Shaders {
     private Shaders() {}
@@ -29,14 +32,12 @@ public final class Shaders {
             + "uniform sampler2D sampler0;\nuniform vec2 u_texelDelta;\nuniform vec2 u_pixelDelta;\n"
             + "varying vec2 v_texcoord0;\n";
 
-    /** id, menu label, needs linear filtering, fragment body. */
+    /** id, menu label, needs linear filtering, "s" scaler / "e" effect, fragment body. */
     static final String[][] BUILT_IN = {
-            {"nearest", "Píxeles nítidos", "0",
-                    "void main() { gl_FragColor = texture2D(sampler0, v_texcoord0); }"},
-            {"smooth", "Suavizado", "1",
+            {"nearest", "Nítido (píxeles tal cual)", "0", "s",
                     "void main() { gl_FragColor = texture2D(sampler0, v_texcoord0); }"},
             // Integer prescale + bilinear only on pixel edges: sharp at any (non-integer) scale.
-            {"sharp", "Nítido sin deformar (sharp bilinear)", "1",
+            {"sharp", "Nítido sin deformar (sharp bilinear)", "1", "s",
                     "void main() {\n"
                     + "  vec2 scale = max(floor(u_texelDelta / u_pixelDelta), vec2(1.0));\n"
                     + "  vec2 texel = v_texcoord0 / u_texelDelta;\n"
@@ -45,21 +46,9 @@ public final class Shaders {
                     + "  vec2 f = (d - clamp(d, -range, range)) * scale + 0.5;\n"
                     + "  gl_FragColor = texture2D(sampler0, (floor(texel) + f) * u_texelDelta);\n"
                     + "}"},
-            {"scanlines", "Scanlines", "0",
-                    "void main() {\n"
-                    + "  float y = fract(v_texcoord0.y / u_texelDelta.y);\n"
-                    + "  vec3 c = texture2D(sampler0, v_texcoord0).rgb;\n"
-                    + "  gl_FragColor = vec4(c * (0.68 + 0.32 * sin(y * 3.14159)) * 1.12, 1.0);\n"
-                    + "}"},
-            {"lcd", "Rejilla LCD", "0",
-                    "void main() {\n"
-                    + "  vec2 texel = v_texcoord0 / u_texelDelta;\n"
-                    + "  vec2 d = abs(fract(texel) - 0.5);\n"
-                    + "  float edge = smoothstep(0.34, 0.5, max(d.x, d.y));\n"
-                    + "  vec3 c = texture2D(sampler0, (floor(texel) + 0.5) * u_texelDelta).rgb;\n"
-                    + "  gl_FragColor = vec4(c * (1.0 - 0.42 * edge), 1.0);\n"
-                    + "}"},
-            {"crt", "CRT", "1",
+            {"smooth", "Suavizado (bilineal)", "1", "s",
+                    "void main() { gl_FragColor = texture2D(sampler0, v_texcoord0); }"},
+            {"crt", "CRT (curvatura y máscara)", "1", "e",
                     "void main() {\n"
                     + "  vec2 uv = v_texcoord0 * 2.0 - 1.0;\n"
                     + "  uv *= 1.0 + vec2(uv.y * uv.y, uv.x * uv.x) * 0.045;\n"
@@ -72,21 +61,50 @@ public final class Shaders {
                     + "  float vig = 1.0 - 0.25 * dot(uv, uv);\n"
                     + "  gl_FragColor = vec4(c * scan * mask * vig * 1.25, 1.0);\n"
                     + "}"},
-            {"mono", "LCD monocromo (verde)", "0",
+            // Thin dark gap between game rows, wider only when each game row is several screen pixels tall.
+            {"scanlines", "Scanlines suaves", "0", "e",
+                    "void main() {\n"
+                    + "  vec3 c = texture2D(sampler0, v_texcoord0).rgb;\n"
+                    + "  float rows = u_texelDelta.y / u_pixelDelta.y;\n"
+                    + "  float y = fract(v_texcoord0.y / u_texelDelta.y);\n"
+                    + "  float w = clamp(1.0 / rows, 0.08, 0.5);\n"
+                    + "  float gap = smoothstep(1.0 - w, 1.0, y) + 1.0 - smoothstep(0.0, w, y);\n"
+                    + "  gl_FragColor = vec4(c * (1.0 - 0.35 * min(gap, 1.0)) * 1.06, 1.0);\n"
+                    + "}"},
+            {"lcd", "Rejilla LCD (pantalla de teléfono)", "0", "e",
+                    "void main() {\n"
+                    + "  vec2 texel = v_texcoord0 / u_texelDelta;\n"
+                    + "  vec2 px = u_texelDelta / u_pixelDelta;\n"
+                    + "  vec2 d = abs(fract(texel) - 0.5) * 2.0;\n"
+                    + "  vec2 edge = smoothstep(1.0 - 1.6 / px, vec2(1.0), d);\n"
+                    + "  vec3 c = texture2D(sampler0, (floor(texel) + 0.5) * u_texelDelta).rgb;\n"
+                    + "  gl_FragColor = vec4(c * (1.0 - 0.28 * max(edge.x, edge.y)), 1.0);\n"
+                    + "}"},
+            {"mono", "LCD verde (teléfono monocromo)", "0", "e",
                     "void main() {\n"
                     + "  vec2 texel = v_texcoord0 / u_texelDelta;\n"
                     + "  vec3 c = texture2D(sampler0, (floor(texel) + 0.5) * u_texelDelta).rgb;\n"
                     + "  float l = dot(c, vec3(0.299, 0.587, 0.114));\n"
-                    + "  vec3 g = mix(vec3(0.06, 0.15, 0.06), vec3(0.62, 0.74, 0.32), l);\n"
-                    + "  vec2 d = abs(fract(texel) - 0.5);\n"
-                    + "  gl_FragColor = vec4(g * (1.0 - 0.3 * smoothstep(0.38, 0.5, max(d.x, d.y))), 1.0);\n"
+                    + "  vec3 g = mix(vec3(0.10, 0.19, 0.10), vec3(0.66, 0.76, 0.42), l);\n"
+                    + "  vec2 d = abs(fract(texel) - 0.5) * 2.0;\n"
+                    + "  vec2 edge = smoothstep(1.0 - 1.6 / (u_texelDelta / u_pixelDelta), vec2(1.0), d);\n"
+                    + "  gl_FragColor = vec4(g * (1.0 - 0.2 * max(edge.x, edge.y)), 1.0);\n"
                     + "}"},
+    };
+
+    /** RetroArch filters bundled in assets/shaders-retro/: id, label, file, needs linear, "s"/"e". */
+    static final String[][] RETRO = {
+            {"xbr", "xBR (redondea el pixel art)", "xbr-lv2.glsl", "0", "s"},
+            {"mmpx", "MMPX (pixel art nítido, bordes limpios)", "mmpx.glsl", "0", "s"},
+            {"aann", "AANN (nítido sin dientes de sierra)", "aann.glsl", "1", "s"},
+            {"crt-lottes", "CRT Lottes (televisión)", "crt-lottes.glsl", "1", "e"},
+            {"dot", "Matriz de puntos (consola portátil)", "dot.glsl", "1", "e"},
     };
 
     /** A loaded shader program description. */
     static final class Def {
         String id, label, vertex = VERTEX, fragment;
-        boolean linear;
+        boolean linear, scaler;
     }
 
     static Def builtIn(String id) {
@@ -96,21 +114,36 @@ public final class Shaders {
                 d.id = s[0];
                 d.label = s[1];
                 d.linear = s[2].equals("1");
-                d.fragment = HEAD + s[3];
+                d.scaler = s[3].equals("s");
+                d.fragment = HEAD + s[4];
                 return d;
             }
         }
         return null;
     }
 
-    /** Built-ins plus every [section] of every assets/shaders/*.ini (PPSSPP format). */
+    /** Every filter: built-ins, bundled RetroArch ones, and whatever is in assets/shaders/. */
     static List<Def> all(Context ctx) {
         List<Def> out = new ArrayList<Def>();
         for (String[] s : BUILT_IN) out.add(builtIn(s[0]));
+        for (String[] r : RETRO) {
+            Def d = retro(ctx, "shaders-retro/" + r[2], r[0], r[1]);
+            if (d == null) continue;
+            d.linear = r[3].equals("1");
+            d.scaler = r[4].equals("s");
+            out.add(d);
+        }
         try {
             String[] files = ctx.getAssets().list("shaders");
             if (files == null) return out;
             for (String f : files) {
+                if (f.toLowerCase().endsWith(".glsl")) {
+                    Def d = retro(ctx, "shaders/" + f, "retro:" + f, f.substring(0, f.length() - 5));
+                    if (d != null) {
+                        d.linear = true;
+                        out.add(d);
+                    }
+                }
                 if (!f.toLowerCase().endsWith(".ini")) continue;
                 String section = null, name = null, frag = null, vert = null;
                 for (String raw : read(ctx, "shaders/" + f).split("\n")) {
@@ -133,6 +166,21 @@ public final class Shaders {
         return out;
     }
 
+    /** RetroArch single-file shader; the "#version 130" some declare is dropped (GLES 2.0 is version 100). */
+    private static Def retro(Context ctx, String asset, String id, String label) {
+        try {
+            String src = read(ctx, asset).replaceAll("(?m)^\\s*#version.*$", "");
+            Def d = new Def();
+            d.id = id;
+            d.label = label;
+            d.vertex = "#define VERTEX\n" + src;
+            d.fragment = "#define FRAGMENT\n" + src;
+            return d;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static void add(Context ctx, List<Def> out, String section, String name, String frag, String vert) {
         if (section == null || frag == null) return;
         try {
@@ -146,11 +194,26 @@ public final class Shaders {
         } catch (Exception ignored) {} // missing file referenced by the .ini
     }
 
-    static Def find(Context ctx, String id) {
-        Def d = builtIn(id);
-        if (d != null) return d;
-        for (Def x : all(ctx)) if (x.id.equals(id)) return x;
-        return builtIn("nearest");
+    /** "xbr+crt-lottes" -> the filters in order (unknown ids skipped; never empty). */
+    static List<Def> chain(Context ctx, String spec) {
+        List<Def> all = null, out = new ArrayList<Def>();
+        for (String id : spec.split("\\+")) {
+            Def d = builtIn(id.trim());
+            if (d == null) {
+                if (all == null) all = all(ctx);
+                for (Def x : all) if (x.id.equals(id.trim())) d = x;
+            }
+            if (d != null) out.add(d);
+        }
+        if (out.isEmpty()) out.add(builtIn("nearest"));
+        return out;
+    }
+
+    /** Menu text for a chain: "xBR + CRT Lottes". */
+    static String label(Context ctx, String spec) {
+        StringBuilder b = new StringBuilder();
+        for (Def d : chain(ctx, spec)) b.append(b.length() > 0 ? " + " : "").append(d.label.split(" \\(")[0]);
+        return b.toString();
     }
 
     private static String read(Context ctx, String asset) throws java.io.IOException {

@@ -24,8 +24,17 @@ public final class Config {
     public boolean autoFit = true;
     /** vsync | dynamic | unlimited (see GlScreen). */
     public String fpsMode = "vsync";
-    /** full | minimal | none */
+    /** gamepad | full (phone keypad) | minimal | none */
     public String keypad = "full";
+    /** On-screen gamepad: xbox | play | arcade buttons, joystick instead of d-pad, size in %. */
+    public String padStyle = "xbox";
+    public boolean padStick = false;
+    public int padScale = 100;
+    /** Game key each pad button sends (53 = key 5, -5 = OK...) and the buttons hidden ("x,y"). */
+    public String padMap = "a=-5,b=55,x=57,y=48,c=42,z=35";
+    public String padHide = "";
+    /** Game image centered on the whole screen; the controls float over the side margins. */
+    public boolean center = true;
     /** Ask the player once whether to show the keypad (touch games with their own controls). */
     public boolean keypadAsk = false;
     /** 0..255 */
@@ -66,6 +75,12 @@ public final class Config {
         c.rotate = i(p, "rotate", c.rotate);
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
+        c.padStyle = s(p, "pad.style", c.padStyle);
+        c.padStick = b(p, "pad.stick", c.padStick);
+        c.padScale = i(p, "pad.scale", c.padScale);
+        c.padMap = s(p, "pad.map", c.padMap);
+        c.padHide = s(p, "pad.hide", c.padHide);
+        c.center = b(p, "center", c.center);
         c.keypadAsk = b(p, "keypad.ask", c.keypadAsk);
         c.haptics = b(p, "keypad.haptics", c.haptics);
         c.showFps = b(p, "show.fps", c.showFps);
@@ -84,6 +99,34 @@ public final class Config {
         c.softLeft = i(p, "softkey.left", c.softLeft);
         c.softRight = i(p, "softkey.right", c.softRight);
         return c;
+    }
+
+    /** Game key a pad button ("a", "b", "x"...) sends. */
+    public int padCode(String id) {
+        for (String kv : padMap.split(",")) {
+            String[] p = kv.split("=");
+            if (p.length == 2 && p[0].trim().equals(id)) {
+                try { return Integer.parseInt(p[1].trim()); } catch (NumberFormatException ignored) {}
+            }
+        }
+        return Keys.NUM5;
+    }
+
+    public void setPadCode(String id, int code) {
+        StringBuilder b = new StringBuilder();
+        boolean found = false;
+        for (String kv : padMap.split(",")) {
+            if (kv.trim().length() == 0) continue;
+            boolean me = kv.split("=")[0].trim().equals(id);
+            found |= me;
+            b.append(b.length() > 0 ? "," : "").append(me ? id + "=" + code : kv.trim());
+        }
+        if (!found) b.append(b.length() > 0 ? "," : "").append(id).append('=').append(code);
+        padMap = b.toString();
+    }
+
+    public boolean padHidden(String id) {
+        return ("," + padHide.replace(" ", "") + ",").contains("," + id + ",");
     }
 
     /** Font size in px; 0 in the config = derived from the (possibly user-changed) screen size. */

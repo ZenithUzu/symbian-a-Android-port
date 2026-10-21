@@ -22,15 +22,20 @@ public final class Keys {
             case KeyEvent.KEYCODE_DPAD_LEFT: case KeyEvent.KEYCODE_A: return LEFT;
             case KeyEvent.KEYCODE_DPAD_RIGHT: case KeyEvent.KEYCODE_D: return RIGHT;
             case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER: case KeyEvent.KEYCODE_SPACE:
-            case KeyEvent.KEYCODE_BUTTON_A: case KeyEvent.KEYCODE_NUMPAD_ENTER: return FIRE;
+            case KeyEvent.KEYCODE_NUMPAD_ENTER: return FIRE;
+            // a real gamepad uses the same keys as the on-screen one (port menu > Controles)
+            case KeyEvent.KEYCODE_BUTTON_A: return Host.cfg.padCode("a");
+            case KeyEvent.KEYCODE_BUTTON_B: return Host.cfg.padCode("b");
+            case KeyEvent.KEYCODE_BUTTON_X: return Host.cfg.padCode("x");
+            case KeyEvent.KEYCODE_BUTTON_Y: return Host.cfg.padCode("y");
             case KeyEvent.KEYCODE_Q: case KeyEvent.KEYCODE_F1: case KeyEvent.KEYCODE_MENU:
-            case KeyEvent.KEYCODE_BUTTON_START: return SOFT_LEFT;
-            case KeyEvent.KEYCODE_E: case KeyEvent.KEYCODE_F2: case KeyEvent.KEYCODE_BUTTON_B:
-            case KeyEvent.KEYCODE_BUTTON_SELECT: return SOFT_RIGHT;
+            case KeyEvent.KEYCODE_BUTTON_SELECT: return SOFT_LEFT;
+            case KeyEvent.KEYCODE_E: case KeyEvent.KEYCODE_F2:
+            case KeyEvent.KEYCODE_BUTTON_START: return SOFT_RIGHT;
             case KeyEvent.KEYCODE_DEL: return CLEAR;
-            case KeyEvent.KEYCODE_STAR: case KeyEvent.KEYCODE_NUMPAD_MULTIPLY: case KeyEvent.KEYCODE_BUTTON_X:
-            case KeyEvent.KEYCODE_BUTTON_L1: return STAR;
-            case KeyEvent.KEYCODE_POUND: case KeyEvent.KEYCODE_BUTTON_Y: case KeyEvent.KEYCODE_BUTTON_R1: return POUND;
+            case KeyEvent.KEYCODE_STAR: case KeyEvent.KEYCODE_NUMPAD_MULTIPLY: case KeyEvent.KEYCODE_BUTTON_L1:
+                return STAR;
+            case KeyEvent.KEYCODE_POUND: case KeyEvent.KEYCODE_BUTTON_R1: return POUND;
             case KeyEvent.KEYCODE_CALL: return SEND;
             default:
                 if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) return NUM0 + (keyCode - KeyEvent.KEYCODE_0);

@@ -34,10 +34,13 @@ SCREENS = [("Detectar automáticamente", None)] + [
         (96, 65), (101, 80), (128, 128), (128, 160), (132, 176), (176, 204), (176, 208), (176, 220),
         (208, 208), (240, 260), (240, 320), (320, 240), (240, 400), (400, 240), (240, 432), (352, 416),
         (320, 480), (480, 320), (360, 640), (640, 360), (480, 640), (640, 480), (480, 800), (800, 480))]
-ORIENTATIONS = [("Detectar automáticamente", None), ("Vertical", "portrait"), ("Horizontal", "landscape"),
-                ("Girar libremente", "auto")]
-SHADERS = [("Píxeles nítidos", "nearest"), ("Nítido sin deformar (sharp)", "sharp"), ("Suavizado", "smooth"),
-           ("Scanlines", "scanlines"), ("Rejilla LCD", "lcd"), ("CRT", "crt"), ("LCD verde", "mono")]
+ORIENTATIONS = [("La del teléfono (gira libremente)", None), ("Siempre vertical", "portrait"),
+                ("Siempre horizontal", "landscape")]
+SHADERS = [("Nítido", "nearest"), ("Nítido sin deformar (sharp)", "sharp"), ("xBR (redondea el pixel art)", "xbr"),
+           ("MMPX (pixel art nítido)", "mmpx"), ("AANN (nítido sin dientes)", "aann"), ("Suavizado", "smooth"),
+           ("CRT", "nearest+crt"), ("CRT Lottes (televisión)", "nearest+crt-lottes"), ("xBR + CRT Lottes", "xbr+crt-lottes"),
+           ("Scanlines suaves", "nearest+scanlines"), ("Rejilla LCD", "nearest+lcd"), ("Matriz de puntos", "nearest+dot"),
+           ("LCD verde", "nearest+mono")]
 FPS_MODES = [("Sincronizado (vsync)", "vsync"), ("Dinámico (la pantalla se adapta)", "dynamic"),
              ("Sin límite", "unlimited")]
 FPS_LIMITS = [("Sin límite", "0"), ("15", "15"), ("20", "20"), ("25", "25"), ("30", "30"), ("60", "60")]
@@ -45,8 +48,9 @@ SCALES = [("Proporción original", "fit"), ("16:9 (usa casi toda la pantalla, de
           ("Pixel perfect", "integer"), ("Completa (estirar)", "stretch")]
 ROTATIONS = [("Automático (detecta juegos que dibujan de lado)", None), ("No", "0"), ("90° (el juego dibuja de lado, girar a la derecha)", "90"),
              ("270° (el juego dibuja de lado, girar a la izquierda)", "270")]
-KEYPADS = [("Automático (juegos táctiles: preguntar)", None), ("Completo (cruceta + números)", "full"),
-           ("Cruceta + OK", "minimal"), ("Sin teclado (el juego trae controles táctiles)", "none")]
+KEYPADS = [("Mando (cruceta + botones; táctiles: preguntar)", None), ("Teclado del teléfono (números)", "full"),
+           ("Cruceta + OK", "minimal"), ("Sin controles (el juego trae controles táctiles)", "none")]
+PAD_STYLES = [("Xbox (A B X Y)", "xbox"), ("PlayStation (✕ ○ □ △)", "play"), ("Arcade (6 botones)", "arcade")]
 
 
 # Colores: la lista de juegos imita la pantalla LCD de un teléfono Nokia; el resto queda sobrio.
@@ -109,7 +113,7 @@ def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
     a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
          "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--scale", v.get("scale") or "fit"]
-    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("screen", "--screen"),
+    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("pad_style", "--pad-style"), ("screen", "--screen"),
                       ("orientation", "--orientation"), ("name", "--name"), ("package", "--package"),
                       ("shaders", "--shaders")):
         if v.get(key):
@@ -224,14 +228,14 @@ class App(BaseTk):
         self.opts.columnconfigure(1, weight=1)
         self.opts.columnconfigure(3, weight=1)
         cells = [("Modo", "mode", MODES), ("Resolución", "screen", SCREENS), ("Rotación", "orientation", ORIENTATIONS),
-                 ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Shader", "shader", SHADERS),
+                 ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Filtro", "shader", SHADERS),
                  ("Modo de FPS", "fps_mode", FPS_MODES), ("Límite de FPS", "fps", FPS_LIMITS),
-                 ("Teclado táctil", "keypad", KEYPADS)]
+                 ("Controles", "keypad", KEYPADS), ("Botones del mando", "pad_style", PAD_STYLES)]
         for i, (label, key, options) in enumerate(cells):
             self.combo(self.opts, i // 2, (i % 2) * 2, label, key, options)
         r = len(cells) // 2 + 1
         self.vars["shaders"] = tk.StringVar()
-        ttk.Label(self.opts, text="Shaders PPSSPP").grid(row=r, column=0, sticky="w", pady=3)
+        ttk.Label(self.opts, text="Filtros extra").grid(row=r, column=0, sticky="w", pady=3)
         ttk.Button(self.opts, text="Elegir carpeta…", command=self.pick_shaders).grid(row=r, column=1, sticky="w")
         ttk.Label(self.opts, textvariable=self.vars["shaders"], style="Muted.TLabel").grid(
             row=r, column=2, columnspan=2, sticky="w")
@@ -420,7 +424,7 @@ class App(BaseTk):
 
     def update_options_label(self):
         changed = ["%s: %s" % (self.vars[k + "#label"], self.vars[k].get().split(" (")[0])
-                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "fps_mode", "fps", "keypad")
+                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "fps_mode", "fps", "keypad", "pad_style")
                    if self.vars[k].get() != self.vars[k + "#default"]]
         summary = "todo automático" if not changed else ", ".join(changed)
         self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Opciones: " + summary)
@@ -451,7 +455,7 @@ class App(BaseTk):
         self.refresh()
 
     def pick_shaders(self):
-        p = filedialog.askdirectory(title="Carpeta con shaders .ini/.fsh (formato PPSSPP)")
+        p = filedialog.askdirectory(title="Carpeta con filtros RetroArch (.glsl) o PPSSPP (.ini/.fsh)")
         if p:
             self.vars["shaders"].set(p)
 
@@ -465,7 +469,7 @@ class App(BaseTk):
             save_prefs(self.prefs)
         root = self.out_root()
         v = {k: self.value(k) for k in ("mode", "screen", "orientation", "shader", "fps_mode", "fps",
-                                        "keypad", "shaders", "rotate", "scale")}
+                                        "keypad", "pad_style", "shaders", "rotate", "scale")}
         existing = [g for g in self.games.values() if os.path.isdir(g.out(root)) and os.listdir(g.out(root))]
         replace = False
         if existing:

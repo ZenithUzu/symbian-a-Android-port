@@ -16,6 +16,12 @@ final class Settings {
         c.shader = p.getString("shader", c.shader);
         c.fpsMode = p.getString("fps.mode", c.fpsMode);
         c.keypadAlpha = p.getInt("keypad.alpha", c.keypadAlpha);
+        c.padStyle = p.getString("pad.style", c.padStyle);
+        c.padStick = p.getBoolean("pad.stick", c.padStick);
+        c.padScale = p.getInt("pad.scale", c.padScale);
+        c.padMap = p.getString("pad.map", c.padMap);
+        c.padHide = p.getString("pad.hide", c.padHide);
+        c.center = p.getBoolean("center", c.center);
         c.haptics = p.getBoolean("keypad.haptics", c.haptics);
         c.showFps = p.getBoolean("show.fps", c.showFps);
         c.frameBlend = p.getBoolean("frame.blend", c.frameBlend);
@@ -53,6 +59,12 @@ final class Settings {
                 .putString("shader", c.shader)
                 .putString("fps.mode", c.fpsMode)
                 .putInt("keypad.alpha", c.keypadAlpha)
+                .putString("pad.style", c.padStyle)
+                .putBoolean("pad.stick", c.padStick)
+                .putInt("pad.scale", c.padScale)
+                .putString("pad.map", c.padMap)
+                .putString("pad.hide", c.padHide)
+                .putBoolean("center", c.center)
                 .putBoolean("keypad.haptics", c.haptics)
                 .putBoolean("show.fps", c.showFps)
                 .putBoolean("frame.blend", c.frameBlend)
@@ -72,6 +84,24 @@ final class Settings {
     /** Forget everything the player changed (port.properties values apply on next start). */
     static void reset(Context ctx) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();
+    }
+
+    /** Where the player dragged each control group, per orientation: "dx,dy,dx,dy,dx,dy" (view fractions). */
+    static float[] padOffsets(Context ctx, boolean landscape) {
+        float[] o = new float[6];
+        String[] v = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(landscape ? "pad.pos.l" : "pad.pos.p", "").split(",");
+        for (int i = 0; i < 6 && i < v.length; i++) {
+            try { o[i] = Float.parseFloat(v[i]); } catch (NumberFormatException ignored) {}
+        }
+        return o;
+    }
+
+    static void savePadOffsets(Context ctx, boolean landscape, float[] o) {
+        StringBuilder b = new StringBuilder();
+        for (float f : o) b.append(b.length() > 0 ? "," : "").append(f);
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(landscape ? "pad.pos.l" : "pad.pos.p", b.toString()).apply();
     }
 
     /** Only written when the player picks a resolution, so port.properties stays the default. */

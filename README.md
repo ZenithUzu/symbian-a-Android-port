@@ -87,13 +87,13 @@ python tool/j2a.py decompile Juego.jar -o Juego-src
 | Opción | Descripción |
 |---|---|
 | `--screen 240x320` | Resolución virtual. Normalmente no hace falta: j2a la deduce del manifiesto, del nombre del archivo (`Juego_176x208.jar`, `Juego_N95.jar`), de las imágenes y de los números fijos en el código. Además, el APK ajusta solo el área visible y la rotación si el juego dibuja menos de lo esperado. |
-| `--orientation portrait/landscape/auto` | Orientación de la app. |
+| `--orientation portrait/landscape` | Fija la orientación. Por defecto la app gira con el teléfono. |
 | `--scale fit/integer/stretch` | Escalado. |
-| `--shader sharp` | Shader por defecto: `nearest`, `smooth`, `sharp`, `scanlines`, `lcd`, `crt`, `mono`. |
-| `--shaders carpeta/` | Incluye shaders en formato PPSSPP (`.ini` + `.fsh` [+ `.vsh`]), p. ej. los de [jdgleaver/ppsspp_shaders](https://github.com/jdgleaver/ppsspp_shaders). Ojo: esos son GPL. |
+| `--shader xbr+crt-lottes` | Filtros: uno de escalado (`nearest`, `sharp`, `smooth`, `xbr`, `mmpx`, `aann`) y efectos encima con `+` (`crt`, `crt-lottes`, `scanlines`, `lcd`, `dot`, `mono`). |
+| `--shaders carpeta/` | Incluye filtros de RetroArch (`.glsl`, [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders)) o PPSSPP (`.ini` + `.fsh`). Revisa su licencia: muchos son GPL. |
 | `--fps-mode vsync/dynamic/unlimited` | Sincronizado con la pantalla, dinámico (la pantalla adapta sus Hz a los FPS del juego) o sin límite. |
 | `--keep-j2me-packages` | No renombrar las APIs al paquete del motor (ver "Port nativo"). |
-| `--keypad full/minimal/none` | Teclado virtual en pantalla. |
+| `--keypad gamepad/full/minimal/none`, `--pad-style xbox/play/arcade` | Controles en pantalla: mando (por defecto), teclado del teléfono, cruceta + OK u ocultos. |
 | `--fps 30` | Limita los FPS (muchos juegos van demasiado rápido en móviles actuales). |
 | `--package com.yo.juego`, `--name "Mi Juego"` | ID y nombre de la app. |
 | `--midlet 2` / `--midlet-class X` | Qué MIDlet lanzar si el JAR trae varios o no los declara. |
@@ -108,11 +108,17 @@ Todas las opciones de ejecución se pueden cambiar después en
 
 El jugador abre el **menú del port** con el **gesto o botón Atrás** de Android (o Menú/Escape) y puede cambiar:
 resolución (128x160 … 640x360 y **widescreen** con la proporción del móvil), rotación
-(automática/vertical/horizontal), escalado (proporcional, entero, estirar), **shader**
-(nítido, suavizado, sharp bilinear, scanlines, rejilla LCD, CRT, LCD verde monocromo y los PPSSPP que
-incluyas), **modo de FPS** (vsync, dinámico, sin límite), límite de FPS (15–120), contador de FPS,
-teclado virtual, opacidad, vibración, sonido, **captura de pantalla** y restablecer opciones.
-Se guardan entre sesiones.
+(la del teléfono por defecto, o fija vertical/horizontal), centrar la imagen, escalado (proporcional, entero,
+16:9, estirar), **filtros** (uno de escalado: nítido, sharp, suavizado, **xBR**, **MMPX**, **AANN**; y los efectos
+que quieras encima a la vez: **CRT**, **CRT Lottes**, scanlines, rejilla LCD, matriz de puntos, LCD verde, más
+los `.glsl` de RetroArch o PPSSPP que incluyas), **modo de FPS** (vsync, dinámico, sin límite), límite de FPS,
+contador de FPS, anti-parpadeo, sonido, **captura de pantalla** y restablecer opciones.
+
+En **Controles…**: mando en pantalla estilo **Xbox**, **PlayStation** o **arcade** (cruceta o **joystick** a la
+izquierda, botones a la derecha, **Select/Start** arriba = las teclas izquierda/derecha del teléfono, y un botón
+**123** que cambia al teclado numérico), teclado de teléfono, qué tecla del juego manda cada botón, botones
+visibles, **mover los controles arrastrándolos**, tamaño, opacidad y vibración. Un mando físico usa las mismas teclas.
+Todo se guarda entre sesiones.
 
 ## Cómo funciona
 
