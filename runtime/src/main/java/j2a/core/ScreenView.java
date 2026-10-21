@@ -253,14 +253,22 @@ public class ScreenView extends View {
         }
     }
 
-    /** Range ring fixed, the stick (its "_pressed" picture while held) following the finger. */
+    /**
+     * At rest the skin's joystick picture; held, its base (joystick_base: the plate with an empty
+     * socket) stays put and only the stick (joystick_pressed) moves, never past the plate's rim.
+     */
     private void drawStick(Canvas c, Button b) {
-        drawImage(c, img("joystick_range"), b.r, 0);
-        boolean held = !Float.isNaN(b.knobX);
-        float dx = held ? b.knobX - b.r.centerX() : 0, dy = held ? b.knobY - b.r.centerY() : 0;
+        if (Float.isNaN(b.knobX) || img("joystick_base") == null) {
+            drawImage(c, img("joystick"), b.r, 0);
+            return;
+        }
+        drawImage(c, img("joystick_base"), b.r, 0);
+        // finger travel (up to half the radius, see steer) -> stick travel, whose edge then touches the rim
+        float k = b.r.width() * 0.17f / (b.r.width() * 0.25f);
+        float dx = (b.knobX - b.r.centerX()) * k, dy = (b.knobY - b.r.centerY()) * k;
         tmp.set(b.r);
         tmp.offset(dx, dy);
-        drawImage(c, held ? img("joystick_pressed") : img("joystick"), tmp, 0);
+        drawImage(c, img("joystick_pressed"), tmp, 0);
     }
 
     private void drawLabel(Canvas c, Button b, String label, int color, float rel) {
