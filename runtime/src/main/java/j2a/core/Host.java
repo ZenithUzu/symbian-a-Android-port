@@ -238,10 +238,9 @@ public final class Host {
     public static void setCurrent(final Displayable next) {
         if (next == null) return;
         final Displayable prev = current;
-        if (prev == next) {
-            if (next instanceof Canvas) ((Canvas) next).repaint();
-            return;
-        }
+        // already shown: nothing changes (as on a phone). Some games (EA) call setCurrent(this) every
+        // frame mid-update; repainting here showed half-drawn frames (flicker, missing map areas).
+        if (prev == next) return;
         current = next;
         if (prev != null) {
             prev.j2aSetShown(false);
