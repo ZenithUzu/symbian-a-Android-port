@@ -18,6 +18,7 @@ final class Settings {
         c.keypadAlpha = p.getInt("keypad.alpha", c.keypadAlpha);
         c.haptics = p.getBoolean("keypad.haptics", c.haptics);
         c.showFps = p.getBoolean("show.fps", c.showFps);
+        c.frameBlend = p.getBoolean("frame.blend", c.frameBlend);
         c.fpsLimit = p.getInt("fps.limit", c.fpsLimit);
         c.sound = p.getBoolean("sound", c.sound);
         c.screenWidth = p.getInt("screen.width", c.screenWidth);
@@ -54,6 +55,7 @@ final class Settings {
                 .putInt("keypad.alpha", c.keypadAlpha)
                 .putBoolean("keypad.haptics", c.haptics)
                 .putBoolean("show.fps", c.showFps)
+                .putBoolean("frame.blend", c.frameBlend)
                 .putInt("fps.limit", c.fpsLimit)
                 .putBoolean("sound", c.sound)
                 .putString("orientation", c.orientation)

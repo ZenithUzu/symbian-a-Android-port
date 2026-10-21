@@ -34,8 +34,10 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     private static final String TAG = "j2a";
 
     private final Object lock = new Object();
-    private Bitmap staging;
-    private Canvas stagingCanvas;
+    private Bitmap staging, previous;
+    private Canvas stagingCanvas, previousCanvas;
+    private final android.graphics.Paint half = new android.graphics.Paint();
+    { half.setAlpha(128); }
     private boolean dirty, pending;
     private final Rect dst = new Rect();
     private final Rect drawRect = new Rect();
@@ -105,7 +107,20 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
                 stagingCanvas = new Canvas(staging);
             }
             // copy, so the game can keep drawing into its buffer while the GPU uploads this one
-            stagingCanvas.drawBitmap(frame, 0, 0, null);
+            if (c.frameBlend) {
+                // average of this frame and the last one: lines/dots a game flickers every other frame
+                // to fake transparency (old LCDs blended them) look see-through instead of flashing
+                if (previous == null || previous.getWidth() != frame.getWidth() || previous.getHeight() != frame.getHeight()) {
+                    previous = Bitmap.createBitmap(frame.getWidth(), frame.getHeight(), Bitmap.Config.ARGB_8888);
+                    previousCanvas = new Canvas(previous);
+                    previousCanvas.drawBitmap(frame, 0, 0, null);
+                }
+                stagingCanvas.drawBitmap(previous, 0, 0, null);
+                stagingCanvas.drawBitmap(frame, 0, 0, half);
+                previousCanvas.drawBitmap(frame, 0, 0, null);
+            } else {
+                stagingCanvas.drawBitmap(frame, 0, 0, null);
+            }
             dirty = true;
             pending = true;
         }

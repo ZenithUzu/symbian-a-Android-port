@@ -538,6 +538,8 @@ public final class Host {
                             new String[]{"0", "15", "20", "25", "30", "50", "60", "90", "120"},
                             String.valueOf(cfg.fpsLimit), null, "fps"));
             item.accept("Mostrar FPS: " + (cfg.showFps ? "sí" : "no"), () -> toggle(() -> cfg.showFps = !cfg.showFps));
+            item.accept("Anti-parpadeo (mezclar fotogramas): " + (cfg.frameBlend ? "sí" : "no"),
+                    () -> toggle(() -> cfg.frameBlend = !cfg.frameBlend));
             item.accept("Teclado virtual: " + ("none".equals(cfg.keypad) ? "oculto (solo táctil)"
                     : "minimal".equals(cfg.keypad) ? "cruceta + OK" : "completo"), () ->
                     pick("Teclado virtual", new String[]{"Completo", "Cruceta + OK", "Oculto"},

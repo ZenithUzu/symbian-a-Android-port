@@ -33,6 +33,7 @@ Menú/Escape). El menú también tiene accesos a las teclas izquierda y derecha 
 | Nombre oficial: el paquete sale del propio juego (`com.sega.sonic`) o de su editor (`com.gameloft.sonicunleashed`); la carpeta y el APK se llaman como el juego (`Sonic_Unleashed-1.0.0-debug.apk`) | automático, `--package` |
 | Soft keys de otros fabricantes (Motorola -21/-22, Siemens -1/-4, LG -202/-203) | `softkey.left`, `softkey.right` |
 | Contador de FPS | `show.fps=true` |
+| **Anti-parpadeo**: mezcla cada fotograma con el anterior. Arregla los juegos que oscurecen o hacen transparencias con líneas o puntos que alternan cada fotograma (en las pantallas lentas de antes se veían como un velo; en una moderna, como rayas que parpadean) | `frame.blend=true`, menú |
 | Formularios, listas y cajas de texto con controles nativos de Android y teclado del sistema | automático |
 | Pantalla completa inmersiva, soporte de notch, pantalla siempre encendida | automático |
 | Pausa/reanudación correctas (`pauseApp`/`startApp`, música pausada) | automático |

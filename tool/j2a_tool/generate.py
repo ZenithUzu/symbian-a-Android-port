@@ -513,6 +513,8 @@ def _port_items(midlet_class, sw, sh, args):
         ("# 0 = sin límite. Juegos antiguos suelen ir demasiado rápido: prueba 30", None),
         ("fps.limit", args.fps),
         ("show.fps", "false"),
+        ("# true = mezcla cada fotograma con el anterior (juegos que parpadean para simular transparencias)", None),
+        ("frame.blend", "false"),
         ("sound", "true"),
         ("vibration", "true"),
         ("text.antialias", "true"),

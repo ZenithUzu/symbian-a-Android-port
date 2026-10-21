@@ -32,6 +32,8 @@ public final class Config {
     public int keypadAlpha = 150;
     public boolean haptics = true;
     public boolean showFps = false;
+    /** Shows the average of the last two frames: games that fake transparency by flickering. */
+    public boolean frameBlend = false;
     /** 0 = unlimited. Old games often run too fast on modern CPUs: 30 is a good value. */
     public int fpsLimit = 0;
     public boolean sound = true;
@@ -67,6 +69,7 @@ public final class Config {
         c.keypadAsk = b(p, "keypad.ask", c.keypadAsk);
         c.haptics = b(p, "keypad.haptics", c.haptics);
         c.showFps = b(p, "show.fps", c.showFps);
+        c.frameBlend = b(p, "frame.blend", c.frameBlend);
         c.fpsLimit = i(p, "fps.limit", c.fpsLimit);
         c.sound = b(p, "sound", c.sound);
         c.vibration = b(p, "vibration", c.vibration);
