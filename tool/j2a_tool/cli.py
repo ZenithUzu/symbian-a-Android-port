@@ -181,7 +181,7 @@ def main(argv=None):
                    help="no renombrar javax.microedition.* al paquete propio del motor del port")
     s.add_argument("--keypad", choices=["gamepad", "full", "minimal", "none"],
                    help="gamepad = mando (por defecto), full = teclado del teléfono; los táctiles preguntan")
-    s.add_argument("--pad-style", choices=["xbox", "play", "arcade"], default="xbox", help="botones del mando")
+    s.add_argument("--pad-style", choices=["xbox", "switch", "play"], default="xbox", help="skin del mando en pantalla")
     s.add_argument("--fps", type=int, default=0, help="límite de FPS (0 = sin límite)")
     s.add_argument("--platform", default="Nokia6300/07.21", help="valor de microedition.platform")
     s.add_argument("--force", action="store_true", help="sobrescribir la carpeta de salida")

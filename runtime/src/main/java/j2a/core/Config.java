@@ -26,12 +26,17 @@ public final class Config {
     public String fpsMode = "vsync";
     /** gamepad | full (phone keypad) | minimal | none */
     public String keypad = "full";
-    /** On-screen gamepad: xbox | play | arcade buttons, joystick instead of d-pad, size in %. */
+    /** On-screen gamepad skin: xbox | switch | play; size in %. */
     public String padStyle = "xbox";
-    public boolean padStick = false;
     public int padScale = 100;
-    /** Game key each pad button sends (53 = key 5, -5 = OK...) and the buttons hidden ("x,y"). */
-    public String padMap = "a=-5,b=55,x=57,y=48,c=42,z=35";
+    /**
+     * Game key each control sends (-5 = OK, 53 = key 5...; 0 = nothing). Ids: a b x y l r select start,
+     * d-pad du dd dl dr, joystick su sd sl sr; physical gamepad only: l2 r2 l3 r3, right stick ru rd rl rr.
+     * Missing ids use DEFAULT_PAD_MAP, so a player's map from an older version still works.
+     */
+    public String padMap = DEFAULT_PAD_MAP;
+    public static final String DEFAULT_PAD_MAP = "a=-5,b=55,x=57,y=48,l=42,r=35,select=-6,start=-7,"
+            + "du=-1,dd=-2,dl=-3,dr=-4,su=-1,sd=-2,sl=-3,sr=-4,l2=49,r2=51,l3=53,r3=48,ru=50,rd=56,rl=52,rr=54";
     public String padHide = "";
     /** Game image centered on the whole screen; the controls float over the side margins. */
     public boolean center = true;
@@ -76,7 +81,6 @@ public final class Config {
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
         c.padStyle = s(p, "pad.style", c.padStyle);
-        c.padStick = b(p, "pad.stick", c.padStick);
         c.padScale = i(p, "pad.scale", c.padScale);
         c.padMap = s(p, "pad.map", c.padMap);
         c.padHide = s(p, "pad.hide", c.padHide);
@@ -101,15 +105,21 @@ public final class Config {
         return c;
     }
 
-    /** Game key a pad button ("a", "b", "x"...) sends. */
+    /** Game key a control ("a", "du", "l2"...) sends. */
     public int padCode(String id) {
-        for (String kv : padMap.split(",")) {
+        Integer v = lookup(padMap, id);
+        if (v == null) v = lookup(DEFAULT_PAD_MAP, id);
+        return v == null ? 0 : v;
+    }
+
+    private static Integer lookup(String map, String id) {
+        for (String kv : map.split(",")) {
             String[] p = kv.split("=");
             if (p.length == 2 && p[0].trim().equals(id)) {
                 try { return Integer.parseInt(p[1].trim()); } catch (NumberFormatException ignored) {}
             }
         }
-        return Keys.NUM5;
+        return null;
     }
 
     public void setPadCode(String id, int code) {

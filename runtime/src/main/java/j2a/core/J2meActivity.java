@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -181,6 +182,12 @@ public class J2meActivity extends Activity {
                 || (e.getDevice() != null && e.getDevice().getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC)) {
             if (Host.view != null) Host.view.setControllerActive(true);
         }
+        String padId = Keys.padId(code);
+        if (padId != null) { // gamepad button or d-pad: the player's mapping (port menu > Controles)
+            if (e.getAction() == KeyEvent.ACTION_DOWN) pad(padId, true);
+            else if (e.getAction() == KeyEvent.ACTION_UP) pad(padId, false);
+            return true;
+        }
         int j2me = Keys.fromAndroid(code);
         if (j2me == 0) {
             // Letters typed on a hardware keyboard are passed as their character code.
@@ -191,5 +198,38 @@ public class J2meActivity extends Activity {
         if (e.getAction() == KeyEvent.ACTION_DOWN) Host.key(e.getRepeatCount() == 0 ? 0 : 2, j2me);
         else if (e.getAction() == KeyEvent.ACTION_UP) Host.key(1, j2me);
         return true;
+    }
+
+    /** Gamepad controls currently held (a trigger may arrive both as a key and as an axis). */
+    private final java.util.HashSet<String> padHeld = new java.util.HashSet<String>();
+
+    private void pad(String id, boolean down) {
+        if (down ? !padHeld.add(id) : !padHeld.remove(id)) return; // repeat, or already released
+        int code = Host.cfg.padCode(id);
+        if (code != 0) Host.key(down ? 0 : 1, code);
+    }
+
+    /** Analog parts of a gamepad: d-pad as a hat, both sticks and the triggers. */
+    @Override
+    public boolean onGenericMotionEvent(MotionEvent e) {
+        int src = e.getSource();
+        if ((src & InputDevice.SOURCE_JOYSTICK) != InputDevice.SOURCE_JOYSTICK || e.getAction() != MotionEvent.ACTION_MOVE) {
+            return super.onGenericMotionEvent(e);
+        }
+        if (Host.view != null) Host.view.setControllerActive(true);
+        axes("d", e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y));
+        axes("s", e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y));
+        axes("r", e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ));
+        pad("l2", Math.max(e.getAxisValue(MotionEvent.AXIS_LTRIGGER), e.getAxisValue(MotionEvent.AXIS_BRAKE)) > 0.5f);
+        pad("r2", Math.max(e.getAxisValue(MotionEvent.AXIS_RTRIGGER), e.getAxisValue(MotionEvent.AXIS_GAS)) > 0.5f);
+        return true;
+    }
+
+    /** One stick or hat -> its four direction ids ("du", "dd"...), with a dead zone. */
+    private void axes(String p, float x, float y) {
+        pad(p + "u", y < -0.5f);
+        pad(p + "d", y > 0.5f);
+        pad(p + "l", x < -0.5f);
+        pad(p + "r", x > 0.5f);
     }
 }

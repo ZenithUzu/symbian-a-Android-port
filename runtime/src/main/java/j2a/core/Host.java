@@ -555,11 +555,11 @@ public final class Host {
         });
     }
 
-    private static final String[] PAD_TYPES = {"gamepad:xbox", "gamepad:play", "gamepad:arcade", "full", "minimal", "none"};
-    private static final String[] PAD_TYPE_LABELS = {"Mando estilo Xbox (A B X Y)", "Mando estilo PlayStation (✕ ○ □ △)",
-            "Mando arcade (6 botones)", "Teclado del teléfono (números)", "Cruceta + OK", "Ocultos (solo táctil)"};
+    private static final String[] PAD_TYPES = {"gamepad:xbox", "gamepad:switch", "gamepad:play", "full", "minimal", "none"};
+    private static final String[] PAD_TYPE_LABELS = {"Mando estilo Xbox", "Mando estilo Switch", "Mando estilo PlayStation",
+            "Teclado del teléfono (números)", "Cruceta + OK", "Ocultos (solo táctil)"};
 
-    /** Everything about the on-screen controls, in its own list so the main menu stays short. */
+    /** Everything about the controls, in its own list so the main menu stays short. */
     static void showControlsMenu() {
         final java.util.List<String> labels = new java.util.ArrayList<>();
         final java.util.List<Runnable> actions = new java.util.ArrayList<>();
@@ -568,10 +568,8 @@ public final class Host {
         int ti = java.util.Arrays.asList(PAD_TYPES).indexOf(type);
         item.accept("Tipo: " + (ti >= 0 ? PAD_TYPE_LABELS[ti] : type), () ->
                 pick("Tipo de controles", PAD_TYPE_LABELS, PAD_TYPES, type, null, "padType"));
-        item.accept("Dirección: " + (cfg.padStick ? "joystick" : "cruceta"),
-                () -> toggle(() -> cfg.padStick = !cfg.padStick));
-        item.accept("Asignar teclas del juego a los botones", Host::assignPadKeys);
-        item.accept("Mostrar u ocultar botones", Host::pickHiddenButtons);
+        item.accept("Asignar teclas (pantalla y mando físico)", Host::assignPadKeys);
+        item.accept("Mostrar u ocultar controles", Host::pickHiddenButtons);
         item.accept("Mover controles (arrastrar)", () -> view.startEditing());
         item.accept("Devolver los controles a su sitio", () -> view.resetPositions());
         item.accept("Tamaño: " + cfg.padScale + "%", () ->
@@ -580,6 +578,10 @@ public final class Host {
         item.accept("Opacidad: " + (cfg.keypadAlpha * 100 / 255) + "%", () ->
                 pick("Opacidad de los controles", new String[]{"10%", "25%", "50%", "75%", "100%"},
                         new String[]{"26", "64", "128", "192", "255"}, String.valueOf(cfg.keypadAlpha), null, "alpha"));
+        item.accept("Restablecer teclas", () -> {
+            cfg.padMap = Config.DEFAULT_PAD_MAP;
+            settingsChanged();
+        });
         item.accept("Vibración al pulsar: " + (cfg.haptics ? "sí" : "no"), () -> toggle(() -> cfg.haptics = !cfg.haptics));
         item.accept("Vibración del juego: " + (cfg.vibration ? "sí" : "no"), () -> toggle(() -> {
             cfg.vibration = !cfg.vibration;
@@ -591,35 +593,49 @@ public final class Host {
                 .show();
     }
 
-    private static final String[] PAD_IDS = {"a", "b", "x", "y", "c", "z"};
-
-    /** Buttons of the current style: ids and names as drawn. */
-    private static String[][] padButtons() {
-        if ("arcade".equals(cfg.padStyle)) return new String[][]{PAD_IDS, {"A", "B", "X", "Y", "C", "Z"}};
-        if ("play".equals(cfg.padStyle)) return new String[][]{{"a", "b", "x", "y"}, {"✕", "○", "□", "△"}};
-        return new String[][]{{"a", "b", "x", "y"}, {"A", "B", "X", "Y"}};
+    /** Face button names as the current skin draws them (a, b, x, y). */
+    private static String[] faceNames() {
+        if ("play".equals(cfg.padStyle)) return new String[]{"✕", "○", "□", "△"};
+        return new String[]{"A", "B", "X", "Y"};
     }
 
-    /** Button -> game key (the phone key the game expects for that action). */
+    /** Every mappable control: on-screen ones first, then the extras only a physical gamepad has. */
+    private static String[][] padControls() {
+        String[] f = faceNames();
+        String l = "switch".equals(cfg.padStyle) ? "L" : "play".equals(cfg.padStyle) ? "L1" : "LB";
+        String r = "switch".equals(cfg.padStyle) ? "R" : "play".equals(cfg.padStyle) ? "R1" : "RB";
+        return new String[][]{
+                {"a", "b", "x", "y", "l", "r", "select", "start",
+                        "du", "dd", "dl", "dr", "su", "sd", "sl", "sr",
+                        "l2", "r2", "l3", "r3", "ru", "rd", "rl", "rr"},
+                {"Botón " + f[0], "Botón " + f[1], "Botón " + f[2], "Botón " + f[3], l, r, "Select", "Start",
+                        "Cruceta ▲", "Cruceta ▼", "Cruceta ◀", "Cruceta ▶",
+                        "Joystick ▲", "Joystick ▼", "Joystick ◀", "Joystick ▶",
+                        "Mando físico: gatillo L2", "Mando físico: gatillo R2", "Mando físico: clic stick izq. (L3)",
+                        "Mando físico: clic stick der. (R3)", "Mando físico: stick derecho ▲", "Mando físico: stick derecho ▼",
+                        "Mando físico: stick derecho ◀", "Mando físico: stick derecho ▶"}};
+    }
+
+    /** Control -> game key (the phone key the game expects for that action). */
     private static void assignPadKeys() {
-        final String[][] pb = padButtons();
-        String[] ls = new String[pb[0].length];
-        for (int i = 0; i < ls.length; i++) ls[i] = pb[1][i] + "  →  tecla " + ScreenView.keyLabel(cfg.padCode(pb[0][i]));
+        final String[][] pc = padControls();
+        String[] ls = new String[pc[0].length];
+        for (int i = 0; i < ls.length; i++) ls[i] = pc[1][i] + "  →  " + ScreenView.keyLabel(cfg.padCode(pc[0][i]));
         new AlertDialog.Builder(activity)
-                .setTitle("¿Qué botón quieres cambiar?")
+                .setTitle("¿Qué control quieres cambiar?")
                 .setItems(ls, (dlg, which) -> {
-                    final String[] names = {"5", "OK (centro)", "0", "1", "2", "3", "4", "6", "7", "8", "9", "*", "#",
-                            "▲", "▼", "◀", "▶", "Tecla izquierda", "Tecla derecha"};
-                    final int[] codes = {Keys.NUM5, Keys.FIRE, Keys.NUM0, Keys.NUM1, Keys.NUM2, Keys.NUM3, Keys.NUM4,
+                    final String[] names = {"OK (centro)", "5", "0", "1", "2", "3", "4", "6", "7", "8", "9", "*", "#",
+                            "▲", "▼", "◀", "▶", "Tecla izquierda", "Tecla derecha", "Nada"};
+                    final int[] codes = {Keys.FIRE, Keys.NUM5, Keys.NUM0, Keys.NUM1, Keys.NUM2, Keys.NUM3, Keys.NUM4,
                             Keys.NUM6, Keys.NUM7, Keys.NUM8, Keys.NUM9, Keys.STAR, Keys.POUND, Keys.UP, Keys.DOWN,
-                            Keys.LEFT, Keys.RIGHT, Keys.SOFT_LEFT, Keys.SOFT_RIGHT};
+                            Keys.LEFT, Keys.RIGHT, Keys.SOFT_LEFT, Keys.SOFT_RIGHT, 0};
                     int cur = -1;
-                    for (int i = 0; i < codes.length; i++) if (codes[i] == cfg.padCode(pb[0][which])) cur = i;
+                    for (int i = 0; i < codes.length; i++) if (codes[i] == cfg.padCode(pc[0][which])) cur = i;
                     new AlertDialog.Builder(activity)
-                            .setTitle("Botón " + pb[1][which] + " envía la tecla…")
+                            .setTitle(pc[1][which] + " envía la tecla…")
                             .setSingleChoiceItems(names, cur, (d2, k) -> {
                                 d2.dismiss();
-                                cfg.setPadCode(pb[0][which], codes[k]);
+                                cfg.setPadCode(pc[0][which], codes[k]);
                                 settingsChanged();
                             })
                             .show();
@@ -627,22 +643,20 @@ public final class Host {
                 .show();
     }
 
-    /** Hide buttons a game doesn't use (or the d-pad, Select/Start, the 123 switch). */
+    /** Hide controls a game doesn't use. */
     private static void pickHiddenButtons() {
-        String[][] pb = padButtons();
-        final java.util.List<String> ids = new java.util.ArrayList<>(java.util.Arrays.asList(pb[0]));
-        final java.util.List<String> names = new java.util.ArrayList<>(java.util.Arrays.asList(pb[1]));
-        ids.addAll(java.util.Arrays.asList("dir", "select", "start", "toggle"));
-        names.addAll(java.util.Arrays.asList("Cruceta / joystick", "Select (tecla izquierda)", "Start (tecla derecha)",
-                "Botón 123 (teclado numérico)"));
-        final boolean[] shown = new boolean[ids.size()];
-        for (int i = 0; i < shown.length; i++) shown[i] = !cfg.padHidden(ids.get(i));
+        String[] f = faceNames();
+        final String[] ids = {"dpad", "stick", "a", "b", "x", "y", "l", "r", "select", "start", "toggle"};
+        String[] names = {"Cruceta", "Joystick", "Botón " + f[0], "Botón " + f[1], "Botón " + f[2], "Botón " + f[3],
+                "Gatillo izquierdo", "Gatillo derecho", "Select", "Start", "Botón 123 (teclado numérico)"};
+        final boolean[] shown = new boolean[ids.length];
+        for (int i = 0; i < shown.length; i++) shown[i] = !cfg.padHidden(ids[i]);
         new AlertDialog.Builder(activity)
-                .setTitle("Botones visibles")
-                .setMultiChoiceItems(names.toArray(new String[0]), shown, (d, i, v) -> shown[i] = v)
+                .setTitle("Controles visibles")
+                .setMultiChoiceItems(names, shown, (d, i, v) -> shown[i] = v)
                 .setPositiveButton("Aplicar", (d, x) -> {
                     StringBuilder b = new StringBuilder();
-                    for (int i = 0; i < shown.length; i++) if (!shown[i]) b.append(b.length() > 0 ? "," : "").append(ids.get(i));
+                    for (int i = 0; i < shown.length; i++) if (!shown[i]) b.append(b.length() > 0 ? "," : "").append(ids[i]);
                     cfg.padHide = b.toString();
                     settingsChanged();
                 })

@@ -93,7 +93,7 @@ python tool/j2a.py decompile Juego.jar -o Juego-src
 | `--shaders carpeta/` | Incluye filtros de RetroArch (`.glsl`, [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders)) o PPSSPP (`.ini` + `.fsh`). Revisa su licencia: muchos son GPL. |
 | `--fps-mode vsync/dynamic/unlimited` | Sincronizado con la pantalla, dinámico (la pantalla adapta sus Hz a los FPS del juego) o sin límite. |
 | `--keep-j2me-packages` | No renombrar las APIs al paquete del motor (ver "Port nativo"). |
-| `--keypad gamepad/full/minimal/none`, `--pad-style xbox/play/arcade` | Controles en pantalla: mando (por defecto), teclado del teléfono, cruceta + OK u ocultos. |
+| `--keypad gamepad/full/minimal/none`, `--pad-style xbox/switch/play` | Controles en pantalla: mando (por defecto), teclado del teléfono, cruceta + OK u ocultos. |
 | `--fps 30` | Limita los FPS (muchos juegos van demasiado rápido en móviles actuales). |
 | `--package com.yo.juego`, `--name "Mi Juego"` | ID y nombre de la app. |
 | `--midlet 2` / `--midlet-class X` | Qué MIDlet lanzar si el JAR trae varios o no los declara. |
@@ -114,10 +114,11 @@ que quieras encima a la vez: **CRT**, **CRT Lottes**, scanlines, rejilla LCD, ma
 los `.glsl` de RetroArch o PPSSPP que incluyas), **modo de FPS** (vsync, dinámico, sin límite), límite de FPS,
 contador de FPS, anti-parpadeo, sonido, **captura de pantalla** y restablecer opciones.
 
-En **Controles…**: mando en pantalla estilo **Xbox**, **PlayStation** o **arcade** (cruceta o **joystick** a la
-izquierda, botones a la derecha, **Select/Start** arriba = las teclas izquierda/derecha del teléfono, y un botón
-**123** que cambia al teclado numérico), teclado de teléfono, qué tecla del juego manda cada botón, botones
-visibles, **mover los controles arrastrándolos**, tamaño, opacidad y vibración. Un mando físico usa las mismas teclas.
+En **Controles…**: mando en pantalla con skin **Xbox**, **Switch** o **PlayStation** (cruceta **y** joystick
+independientes, 4 botones, L/R, **Select/Start** = las teclas izquierda/derecha del teléfono, y **123** para el
+teclado numérico), teclado de teléfono, **asignar la tecla del juego** a cada control (también los del mando
+físico: L2/R2, L3/R3, stick derecho), controles visibles, **moverlos arrastrándolos**, tamaño, opacidad y
+vibración. Un mando físico se mapea solo con las mismas teclas.
 Todo se guarda entre sesiones.
 
 ## Cómo funciona

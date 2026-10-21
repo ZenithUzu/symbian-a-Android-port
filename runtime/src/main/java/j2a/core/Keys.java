@@ -14,28 +14,43 @@ public final class Keys {
 
     private Keys() {}
 
-    /** Returns 0 if the Android key has no J2ME equivalent. */
+    /** Gamepad buttons and d-pad -> control id of Config.padMap (same keys as the on-screen pad), or null. */
+    public static String padId(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_BUTTON_A: return "a";
+            case KeyEvent.KEYCODE_BUTTON_B: return "b";
+            case KeyEvent.KEYCODE_BUTTON_X: return "x";
+            case KeyEvent.KEYCODE_BUTTON_Y: return "y";
+            case KeyEvent.KEYCODE_BUTTON_L1: return "l";
+            case KeyEvent.KEYCODE_BUTTON_R1: return "r";
+            case KeyEvent.KEYCODE_BUTTON_L2: return "l2";
+            case KeyEvent.KEYCODE_BUTTON_R2: return "r2";
+            case KeyEvent.KEYCODE_BUTTON_THUMBL: return "l3";
+            case KeyEvent.KEYCODE_BUTTON_THUMBR: return "r3";
+            case KeyEvent.KEYCODE_BUTTON_SELECT: return "select";
+            case KeyEvent.KEYCODE_BUTTON_START: return "start";
+            case KeyEvent.KEYCODE_DPAD_UP: return "du";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "dd";
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "dl";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "dr";
+            default: return null;
+        }
+    }
+
+    /** Keyboard keys (and keys without a pad id). Returns 0 if the Android key has no J2ME equivalent. */
     public static int fromAndroid(int keyCode) {
         switch (keyCode) {
-            case KeyEvent.KEYCODE_DPAD_UP: case KeyEvent.KEYCODE_W: return UP;
-            case KeyEvent.KEYCODE_DPAD_DOWN: case KeyEvent.KEYCODE_S: return DOWN;
-            case KeyEvent.KEYCODE_DPAD_LEFT: case KeyEvent.KEYCODE_A: return LEFT;
-            case KeyEvent.KEYCODE_DPAD_RIGHT: case KeyEvent.KEYCODE_D: return RIGHT;
+            case KeyEvent.KEYCODE_W: return UP;
+            case KeyEvent.KEYCODE_S: return DOWN;
+            case KeyEvent.KEYCODE_A: return LEFT;
+            case KeyEvent.KEYCODE_D: return RIGHT;
             case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER: case KeyEvent.KEYCODE_SPACE:
             case KeyEvent.KEYCODE_NUMPAD_ENTER: return FIRE;
-            // a real gamepad uses the same keys as the on-screen one (port menu > Controles)
-            case KeyEvent.KEYCODE_BUTTON_A: return Host.cfg.padCode("a");
-            case KeyEvent.KEYCODE_BUTTON_B: return Host.cfg.padCode("b");
-            case KeyEvent.KEYCODE_BUTTON_X: return Host.cfg.padCode("x");
-            case KeyEvent.KEYCODE_BUTTON_Y: return Host.cfg.padCode("y");
-            case KeyEvent.KEYCODE_Q: case KeyEvent.KEYCODE_F1: case KeyEvent.KEYCODE_MENU:
-            case KeyEvent.KEYCODE_BUTTON_SELECT: return SOFT_LEFT;
-            case KeyEvent.KEYCODE_E: case KeyEvent.KEYCODE_F2:
-            case KeyEvent.KEYCODE_BUTTON_START: return SOFT_RIGHT;
+            case KeyEvent.KEYCODE_Q: case KeyEvent.KEYCODE_F1: case KeyEvent.KEYCODE_MENU: return SOFT_LEFT;
+            case KeyEvent.KEYCODE_E: case KeyEvent.KEYCODE_F2: return SOFT_RIGHT;
             case KeyEvent.KEYCODE_DEL: return CLEAR;
-            case KeyEvent.KEYCODE_STAR: case KeyEvent.KEYCODE_NUMPAD_MULTIPLY: case KeyEvent.KEYCODE_BUTTON_L1:
-                return STAR;
-            case KeyEvent.KEYCODE_POUND: case KeyEvent.KEYCODE_BUTTON_R1: return POUND;
+            case KeyEvent.KEYCODE_STAR: case KeyEvent.KEYCODE_NUMPAD_MULTIPLY: return STAR;
+            case KeyEvent.KEYCODE_POUND: return POUND;
             case KeyEvent.KEYCODE_CALL: return SEND;
             default:
                 if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) return NUM0 + (keyCode - KeyEvent.KEYCODE_0);

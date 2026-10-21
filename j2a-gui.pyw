@@ -50,7 +50,7 @@ ROTATIONS = [("Automático (detecta juegos que dibujan de lado)", None), ("No", 
              ("270° (el juego dibuja de lado, girar a la izquierda)", "270")]
 KEYPADS = [("Mando (cruceta + botones; táctiles: preguntar)", None), ("Teclado del teléfono (números)", "full"),
            ("Cruceta + OK", "minimal"), ("Sin controles (el juego trae controles táctiles)", "none")]
-PAD_STYLES = [("Xbox (A B X Y)", "xbox"), ("PlayStation (✕ ○ □ △)", "play"), ("Arcade (6 botones)", "arcade")]
+PAD_STYLES = [("Xbox", "xbox"), ("Switch", "switch"), ("PlayStation", "play")]
 
 
 # Colores: la lista de juegos imita la pantalla LCD de un teléfono Nokia; el resto queda sobrio.
@@ -230,7 +230,7 @@ class App(BaseTk):
         cells = [("Modo", "mode", MODES), ("Resolución", "screen", SCREENS), ("Rotación", "orientation", ORIENTATIONS),
                  ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Filtro", "shader", SHADERS),
                  ("Modo de FPS", "fps_mode", FPS_MODES), ("Límite de FPS", "fps", FPS_LIMITS),
-                 ("Controles", "keypad", KEYPADS), ("Botones del mando", "pad_style", PAD_STYLES)]
+                 ("Controles", "keypad", KEYPADS), ("Skin del mando", "pad_style", PAD_STYLES)]
         for i, (label, key, options) in enumerate(cells):
             self.combo(self.opts, i // 2, (i % 2) * 2, label, key, options)
         r = len(cells) // 2 + 1

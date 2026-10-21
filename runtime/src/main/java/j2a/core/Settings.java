@@ -17,7 +17,6 @@ final class Settings {
         c.fpsMode = p.getString("fps.mode", c.fpsMode);
         c.keypadAlpha = p.getInt("keypad.alpha", c.keypadAlpha);
         c.padStyle = p.getString("pad.style", c.padStyle);
-        c.padStick = p.getBoolean("pad.stick", c.padStick);
         c.padScale = p.getInt("pad.scale", c.padScale);
         c.padMap = p.getString("pad.map", c.padMap);
         c.padHide = p.getString("pad.hide", c.padHide);
@@ -60,7 +59,6 @@ final class Settings {
                 .putString("fps.mode", c.fpsMode)
                 .putInt("keypad.alpha", c.keypadAlpha)
                 .putString("pad.style", c.padStyle)
-                .putBoolean("pad.stick", c.padStick)
                 .putInt("pad.scale", c.padScale)
                 .putString("pad.map", c.padMap)
                 .putString("pad.hide", c.padHide)
@@ -87,11 +85,11 @@ final class Settings {
     }
 
     /** Where the player dragged each control group, per orientation: "dx,dy,dx,dy,dx,dy" (view fractions). */
-    static float[] padOffsets(Context ctx, boolean landscape) {
-        float[] o = new float[6];
+    static float[] padOffsets(Context ctx, boolean landscape, int n) {
+        float[] o = new float[n];
         String[] v = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(landscape ? "pad.pos.l" : "pad.pos.p", "").split(",");
-        for (int i = 0; i < 6 && i < v.length; i++) {
+        for (int i = 0; i < n && i < v.length; i++) {
             try { o[i] = Float.parseFloat(v[i]); } catch (NumberFormatException ignored) {}
         }
         return o;
