@@ -555,8 +555,8 @@ public final class Host {
         });
     }
 
-    private static final String[] PAD_TYPES = {"gamepad:xbox", "gamepad:switch", "gamepad:play", "full", "minimal", "none"};
-    private static final String[] PAD_TYPE_LABELS = {"Mando estilo Xbox", "Mando estilo Switch", "Mando estilo PlayStation",
+    private static final String[] PAD_TYPES = {"gamepad", "full", "minimal", "none"};
+    private static final String[] PAD_TYPE_LABELS = {"Mando (cruceta, joystick, A B X Y, L R)",
             "Teclado del teléfono (números)", "Cruceta + OK", "Ocultos (solo táctil)"};
 
     /** Everything about the controls, in its own list so the main menu stays short. */
@@ -564,10 +564,10 @@ public final class Host {
         final java.util.List<String> labels = new java.util.ArrayList<>();
         final java.util.List<Runnable> actions = new java.util.ArrayList<>();
         java.util.function.BiConsumer<String, Runnable> item = (l, r) -> { labels.add(l); actions.add(r); };
-        String type = "gamepad".equals(cfg.keypad) ? "gamepad:" + cfg.padStyle : cfg.keypad;
+        String type = cfg.keypad;
         int ti = java.util.Arrays.asList(PAD_TYPES).indexOf(type);
         item.accept("Tipo: " + (ti >= 0 ? PAD_TYPE_LABELS[ti] : type), () ->
-                pick("Tipo de controles", PAD_TYPE_LABELS, PAD_TYPES, type, null, "padType"));
+                pick("Tipo de controles", PAD_TYPE_LABELS, PAD_TYPES, type, null, "keypad"));
         item.accept("Asignar teclas (pantalla y mando físico)", Host::assignPadKeys);
         item.accept("Mostrar u ocultar controles", Host::pickHiddenButtons);
         item.accept("Mover controles (arrastrar)", () -> view.startEditing());
@@ -593,17 +593,10 @@ public final class Host {
                 .show();
     }
 
-    /** Face button names as the current skin draws them (a, b, x, y). */
-    private static String[] faceNames() {
-        if ("play".equals(cfg.padStyle)) return new String[]{"✕", "○", "□", "△"};
-        return new String[]{"A", "B", "X", "Y"};
-    }
-
     /** Every mappable control: on-screen ones first, then the extras only a physical gamepad has. */
     private static String[][] padControls() {
-        String[] f = faceNames();
-        String l = "switch".equals(cfg.padStyle) ? "L" : "play".equals(cfg.padStyle) ? "L1" : "LB";
-        String r = "switch".equals(cfg.padStyle) ? "R" : "play".equals(cfg.padStyle) ? "R1" : "RB";
+        String[] f = {"A", "B", "X", "Y"};
+        String l = "L", r = "R";
         return new String[][]{
                 {"a", "b", "x", "y", "l", "r", "select", "start",
                         "du", "dd", "dl", "dr", "su", "sd", "sl", "sr",
@@ -645,7 +638,7 @@ public final class Host {
 
     /** Hide controls a game doesn't use. */
     private static void pickHiddenButtons() {
-        String[] f = faceNames();
+        String[] f = {"A", "B", "X", "Y"};
         final String[] ids = {"dpad", "stick", "a", "b", "x", "y", "l", "r", "select", "start", "toggle"};
         String[] names = {"Cruceta", "Joystick", "Botón " + f[0], "Botón " + f[1], "Botón " + f[2], "Botón " + f[3],
                 "Gatillo izquierdo", "Gatillo derecho", "Select", "Start", "Botón 123 (teclado numérico)"};
@@ -770,10 +763,7 @@ public final class Host {
                         else if (field.equals("fpsMode")) cfg.fpsMode = v;
                         else if (field.equals("alpha")) cfg.keypadAlpha = Integer.parseInt(v);
                         else if (field.equals("padScale")) cfg.padScale = Integer.parseInt(v);
-                        else if (field.equals("padType")) {
-                            cfg.keypad = v.startsWith("gamepad:") ? "gamepad" : v;
-                            if (v.startsWith("gamepad:")) cfg.padStyle = v.substring(8);
-                        }
+
                         else if (field.equals("rotate")) cfg.rotate = Integer.parseInt(v);
                         if (after != null) after.run();
                         settingsChanged();

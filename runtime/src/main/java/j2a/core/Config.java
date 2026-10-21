@@ -26,8 +26,7 @@ public final class Config {
     public String fpsMode = "vsync";
     /** gamepad | full (phone keypad) | minimal | none */
     public String keypad = "full";
-    /** On-screen gamepad skin: xbox | switch | play; size in %. */
-    public String padStyle = "xbox";
+    /** On-screen gamepad size in %. */
     public int padScale = 100;
     /**
      * Game key each control sends (-5 = OK, 53 = key 5...; 0 = nothing). Ids: a b x y l r select start,
@@ -80,7 +79,6 @@ public final class Config {
         c.rotate = i(p, "rotate", c.rotate);
         c.keypad = s(p, "keypad", c.keypad);
         c.keypadAlpha = i(p, "keypad.alpha", c.keypadAlpha);
-        c.padStyle = s(p, "pad.style", c.padStyle);
         c.padScale = i(p, "pad.scale", c.padScale);
         c.padMap = s(p, "pad.map", c.padMap);
         c.padHide = s(p, "pad.hide", c.padHide);

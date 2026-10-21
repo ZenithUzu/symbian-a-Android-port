@@ -16,7 +16,6 @@ final class Settings {
         c.shader = p.getString("shader", c.shader);
         c.fpsMode = p.getString("fps.mode", c.fpsMode);
         c.keypadAlpha = p.getInt("keypad.alpha", c.keypadAlpha);
-        c.padStyle = p.getString("pad.style", c.padStyle);
         c.padScale = p.getInt("pad.scale", c.padScale);
         c.padMap = p.getString("pad.map", c.padMap);
         c.padHide = p.getString("pad.hide", c.padHide);
@@ -58,7 +57,6 @@ final class Settings {
                 .putString("shader", c.shader)
                 .putString("fps.mode", c.fpsMode)
                 .putInt("keypad.alpha", c.keypadAlpha)
-                .putString("pad.style", c.padStyle)
                 .putInt("pad.scale", c.padScale)
                 .putString("pad.map", c.padMap)
                 .putString("pad.hide", c.padHide)

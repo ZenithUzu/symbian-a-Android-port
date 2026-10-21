@@ -2,10 +2,11 @@ package j2a.core;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.SparseArray;
@@ -19,9 +20,10 @@ import java.util.ArrayList;
  * Transparent overlay above {@link GlScreen}: computes where the game image goes, draws the
  * on-screen controls and the FPS counter, and handles touch.
  *
- * Control modes (Config.keypad): "gamepad" (skins xbox / switch / play: d-pad AND joystick, four face
- * buttons, L/R, Select/Start; every one sends the game key set in Config.padMap), "full" (phone
- * keypad), "minimal" (d-pad + OK) and "none". Each piece can be dragged elsewhere ("Mover controles").
+ * Control modes (Config.keypad): "gamepad" (d-pad AND joystick, A B X Y, L/R, Select/Start; each sends
+ * the game key set in Config.padMap; drawn with the PNG skin in assets/skin/, which a port can replace
+ * with its own app/src/main/assets/skin/), "full" (phone keypad), "minimal" (d-pad + OK) and "none".
+ * Each piece can be dragged elsewhere ("Mover controles").
  */
 public class ScreenView extends View {
 
@@ -50,49 +52,6 @@ public class ScreenView extends View {
         }
     }
 
-    /** Skin look: color of a held control and the face buttons' letters/colors. */
-    private static final class Skin {
-        int accent;
-        String[] face;      // labels for a, b, x, y
-        int[] faceColor;
-        float[][] facePos;  // a, b, x, y offsets in cluster units (x right, y down)
-        String l, r, select, start;
-    }
-
-    private static Skin skin(String style) {
-        Skin s = new Skin();
-        int ink = Color.rgb(38, 41, 46);
-        if ("switch".equals(style)) {
-            s.accent = Color.rgb(230, 0, 18);
-            s.face = new String[]{"A", "B", "X", "Y"};
-            s.faceColor = new int[]{ink, ink, ink, ink};
-            s.facePos = new float[][]{{1, 0}, {0, 1}, {0, -1}, {-1, 0}};
-            s.l = "L";
-            s.r = "R";
-            s.select = "−";
-            s.start = "+";
-        } else if ("play".equals(style)) {
-            s.accent = Color.rgb(46, 109, 180);
-            s.face = new String[]{"cross", "circle", "square", "triangle"}; // drawn as shapes
-            s.faceColor = new int[]{Color.rgb(70, 110, 200), Color.rgb(210, 60, 70), Color.rgb(200, 90, 170), Color.rgb(40, 160, 120)};
-            s.facePos = new float[][]{{0, 1}, {1, 0}, {-1, 0}, {0, -1}};
-            s.l = "L1";
-            s.r = "R1";
-            s.select = "Select";
-            s.start = "Start";
-        } else {
-            s.accent = Color.rgb(16, 124, 16);
-            s.face = new String[]{"A", "B", "X", "Y"};
-            s.faceColor = new int[]{Color.rgb(30, 140, 50), Color.rgb(200, 40, 40), Color.rgb(30, 100, 200), Color.rgb(200, 150, 0)};
-            s.facePos = new float[][]{{0, 1}, {1, 0}, {-1, 0}, {0, -1}};
-            s.l = "LB";
-            s.r = "RB";
-            s.select = "Select";
-            s.start = "Start";
-        }
-        return s;
-    }
-
     private final Object presentLock = new Object();
     private final GlScreen gl;
     private int vw, vh;
@@ -114,8 +73,6 @@ public class ScreenView extends View {
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint lit = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint glyph = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path path = new Path(), armV = new Path(), armH = new Path(), cross = new Path();
     private final RectF tmp = new RectF();
 
     public ScreenView(Context ctx, GlScreen gl) {
@@ -127,9 +84,6 @@ public class ScreenView extends View {
         setKeepScreenOn(true);
         stroke.setStyle(Paint.Style.STROKE);
         stroke.setStrokeWidth(1.5f * density);
-        glyph.setStyle(Paint.Style.STROKE);
-        glyph.setStrokeCap(Paint.Cap.ROUND);
-        glyph.setStrokeJoin(Paint.Join.ROUND);
         text.setTextAlign(Paint.Align.CENTER);
         text.setColor(Color.WHITE);
         text.setFakeBoldText(true);
@@ -199,10 +153,9 @@ public class ScreenView extends View {
     private void drawControls(Canvas c) {
         int alpha = Math.max(0, Math.min(255, Host.cfg.keypadAlpha));
         boolean pad = "gamepad".equals(keypadMode());
-        Skin sk = skin(Host.cfg.padStyle);
         for (int i = 0; i < buttons.size(); i++) {
             Button b = buttons.get(i);
-            if (pad) drawPadButton(c, b, alpha, sk);
+            if (pad) drawPadButton(c, b, alpha);
             else drawKey(c, b, alpha);
         }
         text.setColor(Color.WHITE);
@@ -224,125 +177,90 @@ public class ScreenView extends View {
         drawLabel(c, b, label, Color.argb(Math.min(255, base + 80), 255, 255, 255), 0.42f);
     }
 
-    /** Gamepad skin: light translucent shapes, dark glyphs, the skin's color while held. */
-    private void drawPadButton(Canvas c, Button b, int alpha, Skin sk) {
-        int ink = Color.argb(Math.min(255, alpha + 60), 38, 41, 46);
-        fill.setColor(Color.argb(alpha, 228, 230, 234));
-        stroke.setColor(editing ? Color.rgb(255, 200, 0) : Color.argb(Math.min(255, alpha / 2 + 30), 20, 22, 26));
-        lit.setColor(withAlpha(sk.accent, Math.min(255, alpha + 70)));
-        Paint body = b.pressed ? lit : fill;
-        float cx = b.r.centerX(), cy = b.r.centerY(), s = Math.min(b.r.width(), b.r.height());
-        switch (b.kind) {
-            case DIR:
-                if ("stick".equals(b.id)) drawStick(c, b, ink);
-                else drawDpad(c, b, ink);
-                return;
-            case FACE: {
-                c.drawCircle(cx, cy, s / 2, body);
-                c.drawCircle(cx, cy, s / 2, stroke);
-                int idx = "a".equals(b.id) ? 0 : "b".equals(b.id) ? 1 : "x".equals(b.id) ? 2 : 3;
-                int col = b.pressed ? Color.WHITE : withAlpha(sk.faceColor[idx], Math.min(255, alpha + 80));
-                if (sk.face[idx].length() > 1) drawSymbol(c, sk.face[idx], cx, cy, s * 0.22f, col);
-                else drawLabel(c, b, sk.face[idx], col, 0.5f);
-                return;
-            }
-            default: { // pills: L/R, Select/Start, 123
-                float rr = b.r.height() / 2;
-                c.drawRoundRect(b.r, rr, rr, body);
-                c.drawRoundRect(b.r, rr, rr, stroke);
-                String label = b.label;
-                if (b.kind == SOFT_L || b.kind == SOFT_R) {
-                    String soft = Host.softLabel(b.kind == SOFT_L); // the game's command name if it has one
-                    label = soft != null ? soft : b.kind == SOFT_L ? sk.select : sk.start;
-                } else if ("l".equals(b.id)) {
-                    label = sk.l;
-                } else if ("r".equals(b.id)) {
-                    label = sk.r;
+    /** Skin images (assets/skin/<name>.png, <name>_pressed.png), loaded once; null if missing. */
+    private final java.util.HashMap<String, Bitmap> skinImages = new java.util.HashMap<String, Bitmap>();
+    private final Paint image = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+
+    private Bitmap img(String name) {
+        if (!skinImages.containsKey(name)) {
+            Bitmap b = null;
+            try {
+                java.io.InputStream in = getContext().getAssets().open("skin/" + name + ".png");
+                try { b = BitmapFactory.decodeStream(in); } finally { in.close(); }
+            } catch (Exception ignored) {}
+            skinImages.put(name, b);
+        }
+        return skinImages.get(name);
+    }
+
+    /** Width / height of a skin image (layout keeps the artwork's proportions). */
+    private float aspect(String name, float fallback) {
+        Bitmap b = img(name);
+        return b == null ? fallback : b.getWidth() / (float) b.getHeight();
+    }
+
+    private void drawImage(Canvas c, Bitmap bm, RectF r, float degrees) {
+        if (bm == null) return;
+        if (degrees == 0) {
+            c.drawBitmap(bm, null, r, image);
+            return;
+        }
+        c.save();
+        c.rotate(degrees, r.centerX(), r.centerY());
+        c.drawBitmap(bm, null, r, image);
+        c.restore();
+    }
+
+    /** Gamepad: the skin's picture of each control, its "_pressed" picture while held. */
+    private void drawPadButton(Canvas c, Button b, int alpha) {
+        image.setAlpha(alpha);
+        if (b.kind == DIR) {
+            if ("stick".equals(b.id)) drawStick(c, b);
+            else drawDpad(c, b);
+        } else if (b.kind == TOGGLE) { // no picture for it in a console skin: a small matching pill
+            float rr = b.r.height() / 2;
+            fill.setColor(Color.argb(alpha, b.pressed ? 160 : 232, b.pressed ? 160 : 232, b.pressed ? 160 : 232));
+            c.drawRoundRect(b.r, rr, rr, fill);
+            drawLabel(c, b, "123", Color.argb(Math.min(255, alpha + 60), 80, 80, 84), 0.5f);
+        } else {
+            Bitmap bm = b.pressed ? img(b.id + "_pressed") : null;
+            drawImage(c, bm != null ? bm : img(b.id), b.r, 0);
+            if (b.kind == SOFT_L || b.kind == SOFT_R) { // the game's command name under Select/Start
+                String soft = Host.softLabel(b.kind == SOFT_L);
+                if (soft != null) {
+                    text.setTextSize(Math.min(b.r.height() * 0.32f, 13 * density));
+                    text.setColor(Color.argb(Math.min(255, alpha + 60), 255, 255, 255));
+                    c.drawText(soft, b.r.centerX(), b.r.bottom + text.getTextSize(), text);
                 }
-                drawLabel(c, b, label, b.pressed ? Color.WHITE : ink, 0.5f);
             }
         }
+        if (editing) {
+            stroke.setColor(Color.rgb(255, 200, 0));
+            c.drawRect(b.r, stroke);
+        }
     }
 
-    /** One-piece cross with the held arms in the skin's color and small arrow heads. */
-    private void drawDpad(Canvas c, Button b, int ink) {
-        float cx = b.r.centerX(), cy = b.r.centerY(), s = b.r.width() / 2, t = s * 0.36f, rr = t * 0.45f;
-        armV.reset();
-        tmp.set(cx - t, cy - s, cx + t, cy + s);
-        armV.addRoundRect(tmp, rr, rr, Path.Direction.CW);
-        armH.reset();
-        tmp.set(cx - s, cy - t, cx + s, cy + t);
-        armH.addRoundRect(tmp, rr, rr, Path.Direction.CW);
-        cross.op(armV, armH, Path.Op.UNION); // one piece: no darker overlap, clean outline
-        c.drawPath(cross, fill);
-        float[][] arms = {{cx - t, cy - s, cx + t, cy - t}, {cx - t, cy + t, cx + t, cy + s},
-                {cx - s, cy - t, cx - t, cy + t}, {cx + t, cy - t, cx + s, cy + t}};
-        for (int i = 0; i < 4; i++) {
-            if ((b.mask & (1 << i)) == 0) continue;
-            tmp.set(arms[i][0], arms[i][1], arms[i][2], arms[i][3]);
-            c.drawRoundRect(tmp, rr, rr, lit);
+    /** dpad_pressed_one is "up" and dpad_pressed_two "up + left": turned for the other directions. */
+    private void drawDpad(Canvas c, Button b) {
+        int m = b.mask; // up 1, down 2, left 4, right 8
+        boolean up = (m & 1) != 0, down = (m & 2) != 0, left = (m & 4) != 0, right = (m & 8) != 0;
+        if ((up || down) && (left || right)) {
+            drawImage(c, img("dpad_pressed_two"), b.r, up ? (left ? 0 : 90) : (right ? 180 : 270));
+        } else if (m != 0) {
+            drawImage(c, img("dpad_pressed_one"), b.r, up ? 0 : right ? 90 : down ? 180 : 270);
+        } else {
+            drawImage(c, img("dpad"), b.r, 0);
         }
-        c.drawPath(cross, stroke);
-        glyph.setColor(ink);
-        glyph.setStyle(Paint.Style.FILL);
-        float a = t * 0.55f, o = s * 0.68f; // arrow size, distance from center
-        float[][] dirs = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-        for (float[] d : dirs) {
-            float px = cx + d[0] * o, py = cy + d[1] * o;
-            path.reset();
-            path.moveTo(px + d[0] * a * 0.6f, py + d[1] * a * 0.6f);
-            path.lineTo(px - d[0] * a * 0.4f + d[1] * a * 0.6f, py - d[1] * a * 0.4f + d[0] * a * 0.6f);
-            path.lineTo(px - d[0] * a * 0.4f - d[1] * a * 0.6f, py - d[1] * a * 0.4f - d[0] * a * 0.6f);
-            path.close();
-            c.drawPath(path, glyph);
-        }
-        glyph.setStyle(Paint.Style.STROKE);
     }
 
-    /** Octagonal gate with a knob that follows the finger. */
-    private void drawStick(Canvas c, Button b, int ink) {
-        float cx = b.r.centerX(), cy = b.r.centerY(), s = b.r.width() / 2;
-        path.reset();
-        for (int i = 0; i < 8; i++) {
-            double ang = Math.PI / 8 + i * Math.PI / 4;
-            float x = cx + (float) Math.cos(ang) * s, y = cy + (float) Math.sin(ang) * s;
-            if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
-        }
-        path.close();
-        c.drawPath(path, fill);
-        c.drawPath(path, stroke);
-        float kx = Float.isNaN(b.knobX) ? cx : b.knobX, ky = Float.isNaN(b.knobX) ? cy : b.knobY;
-        Paint knob = b.mask != 0 ? lit : fill;
-        c.drawCircle(kx, ky, s * 0.52f, knob);
-        c.drawCircle(kx, ky, s * 0.52f, stroke);
-        glyph.setColor(ink);
-        glyph.setStrokeWidth(2.2f * density);
-        c.drawCircle(kx, ky, s * 0.36f, glyph);
-    }
-
-    /** PlayStation-style symbols as shapes (crisper than font glyphs). */
-    private void drawSymbol(Canvas c, String sym, float cx, float cy, float r, int color) {
-        glyph.setColor(color);
-        glyph.setStrokeWidth(Math.max(2f * density, r * 0.28f));
-        switch (sym) {
-            case "cross":
-                c.drawLine(cx - r, cy - r, cx + r, cy + r, glyph);
-                c.drawLine(cx - r, cy + r, cx + r, cy - r, glyph);
-                break;
-            case "circle":
-                c.drawCircle(cx, cy, r, glyph);
-                break;
-            case "square":
-                c.drawRect(cx - r * 0.9f, cy - r * 0.9f, cx + r * 0.9f, cy + r * 0.9f, glyph);
-                break;
-            default: // triangle
-                path.reset();
-                path.moveTo(cx, cy - r);
-                path.lineTo(cx + r * 1.05f, cy + r * 0.75f);
-                path.lineTo(cx - r * 1.05f, cy + r * 0.75f);
-                path.close();
-                c.drawPath(path, glyph);
-        }
+    /** Range ring fixed, the stick (its "_pressed" picture while held) following the finger. */
+    private void drawStick(Canvas c, Button b) {
+        drawImage(c, img("joystick_range"), b.r, 0);
+        boolean held = !Float.isNaN(b.knobX);
+        float dx = held ? b.knobX - b.r.centerX() : 0, dy = held ? b.knobY - b.r.centerY() : 0;
+        tmp.set(b.r);
+        tmp.offset(dx, dy);
+        drawImage(c, held ? img("joystick_pressed") : img("joystick"), tmp, 0);
     }
 
     private void drawLabel(Canvas c, Button b, String label, int color, float rel) {
@@ -353,10 +271,6 @@ public class ScreenView extends View {
         if (tw > max && tw > 0) text.setTextSize(size * max / tw);
         text.setColor(color);
         c.drawText(label, b.r.centerX(), b.r.centerY() - (text.descent() + text.ascent()) / 2, text);
-    }
-
-    private static int withAlpha(int color, int a) {
-        return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color));
     }
 
     static String keyLabel(int code) {
@@ -448,9 +362,9 @@ public class ScreenView extends View {
             if (c.center) fit(0, 0, w, h, false);
             else fit(side, 0, w - side, h, false);
             shW = s * 1.0f;
-            shH = s * 0.3f;
-            pillW = s * 0.62f;
-            pillH = s * 0.26f;
+            shH = shW / aspect("l", 2f);
+            pillW = s * 0.7f;
+            pillH = pillW / aspect("select", 2f);
             topY = m;
             leftCx = m + s / 2 + m * 0.5f;
             rightCx = w - leftCx;
@@ -468,9 +382,9 @@ public class ScreenView extends View {
             float room = h - dst.bottom;
             s = Math.min(w * 0.3f, room * 0.36f) * k;
             shW = s * 0.9f;
-            shH = s * 0.28f;
+            shH = Math.min(shW / aspect("l", 2f), s * 0.36f);
             pillW = s * 0.6f;
-            pillH = s * 0.26f;
+            pillH = pillW / aspect("select", 2f);
             topY = dst.bottom + m;
             leftCx = m + s * 0.62f;
             rightCx = w - m - s * 0.75f;
@@ -483,20 +397,21 @@ public class ScreenView extends View {
             String[] ids = {"l", "select", "toggle", "start", "r"};
             int[] kinds = {PILL, SOFT_L, TOGGLE, SOFT_R, PILL};
             int[] groups = {G_L, G_TOP, G_TOP, G_TOP, G_R};
-            for (int i = 0; i < 5; i++) {
-                addPill(x, topY, x + widths[i], topY + shH, ids[i], kinds[i], groups[i]);
+            for (int i = 0; i < 5; i++) { // each keeps its picture's proportions inside its slot
+                float hh = Math.min(shH, widths[i] / aspect(ids[i].equals("toggle") ? "x" : ids[i], 2f));
+                addPill(x, topY + (shH - hh) / 2, x + widths[i], topY + (shH + hh) / 2, ids[i], kinds[i], groups[i]);
                 x += widths[i] + gap;
             }
         }
-        float ds = s * 0.92f;
+        float ds = s * 1.05f; // the d-pad picture has a transparent margin
         if (!c.padHidden("dpad")) addDir("dpad", G_DPAD, leftCx, dpadCy, ds);
         if (!c.padHidden("stick")) addDir("stick", G_STICK, leftCx, stickCy, s);
-        Skin sk = skin(c.padStyle);
         float d = s * 0.36f, r = s * 0.2f;
         String[] ids = {"a", "b", "x", "y"};
+        float[][] pos = {{1, 0}, {0, 1}, {0, -1}, {-1, 0}}; // Nintendo layout: A right, B bottom, X top, Y left
         for (int i = 0; i < 4; i++) {
             if (c.padHidden(ids[i])) continue;
-            float x = rightCx + sk.facePos[i][0] * d, y = faceCy + sk.facePos[i][1] * d;
+            float x = rightCx + pos[i][0] * d, y = faceCy + pos[i][1] * d;
             buttons.add(new Button(x - r, y - r, x + r, y + r, c.padCode(ids[i]), "", FACE, G_FACE, ids[i]));
         }
     }

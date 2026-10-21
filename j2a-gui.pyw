@@ -50,7 +50,6 @@ ROTATIONS = [("Automático (detecta juegos que dibujan de lado)", None), ("No", 
              ("270° (el juego dibuja de lado, girar a la izquierda)", "270")]
 KEYPADS = [("Mando (cruceta + botones; táctiles: preguntar)", None), ("Teclado del teléfono (números)", "full"),
            ("Cruceta + OK", "minimal"), ("Sin controles (el juego trae controles táctiles)", "none")]
-PAD_STYLES = [("Xbox", "xbox"), ("Switch", "switch"), ("PlayStation", "play")]
 
 
 # Colores: la lista de juegos imita la pantalla LCD de un teléfono Nokia; el resto queda sobrio.
@@ -113,7 +112,7 @@ def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
     a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
          "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--scale", v.get("scale") or "fit"]
-    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("pad_style", "--pad-style"), ("screen", "--screen"),
+    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("screen", "--screen"),
                       ("orientation", "--orientation"), ("name", "--name"), ("package", "--package"),
                       ("shaders", "--shaders")):
         if v.get(key):
@@ -230,7 +229,7 @@ class App(BaseTk):
         cells = [("Modo", "mode", MODES), ("Resolución", "screen", SCREENS), ("Rotación", "orientation", ORIENTATIONS),
                  ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Filtro", "shader", SHADERS),
                  ("Modo de FPS", "fps_mode", FPS_MODES), ("Límite de FPS", "fps", FPS_LIMITS),
-                 ("Controles", "keypad", KEYPADS), ("Skin del mando", "pad_style", PAD_STYLES)]
+                 ("Controles", "keypad", KEYPADS)]
         for i, (label, key, options) in enumerate(cells):
             self.combo(self.opts, i // 2, (i % 2) * 2, label, key, options)
         r = len(cells) // 2 + 1
@@ -424,7 +423,7 @@ class App(BaseTk):
 
     def update_options_label(self):
         changed = ["%s: %s" % (self.vars[k + "#label"], self.vars[k].get().split(" (")[0])
-                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "fps_mode", "fps", "keypad", "pad_style")
+                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "fps_mode", "fps", "keypad")
                    if self.vars[k].get() != self.vars[k + "#default"]]
         summary = "todo automático" if not changed else ", ".join(changed)
         self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Opciones: " + summary)
@@ -469,7 +468,7 @@ class App(BaseTk):
             save_prefs(self.prefs)
         root = self.out_root()
         v = {k: self.value(k) for k in ("mode", "screen", "orientation", "shader", "fps_mode", "fps",
-                                        "keypad", "pad_style", "shaders", "rotate", "scale")}
+                                        "keypad", "shaders", "rotate", "scale")}
         existing = [g for g in self.games.values() if os.path.isdir(g.out(root)) and os.listdir(g.out(root))]
         replace = False
         if existing:
