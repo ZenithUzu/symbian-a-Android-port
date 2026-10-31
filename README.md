@@ -192,7 +192,7 @@ como valor de compatibilidad, no como resolución confirmada. AutoFit y el menú
 siguen disponibles. El análisis estático no puede garantizar el tamaño de todos los juegos
 ofuscados, adaptables o con recursos cifrados; la CLI conserva `--screen` como corrección explícita.
 
-En **Centro de juego → Resolución**, primero aparecen la resolución original y las pistas encontradas
+En **Ajustes → Resolución**, primero aparecen la resolución original y las pistas encontradas
 en el manifiesto, JAD, nombre, imágenes y código del JAR. Son recomendaciones detectadas, no garantía
 de que el juego soporte todas ellas. Después están 40 perfiles clásicos y tamaños alternativos,
 incluyendo pantallas pequeñas, formatos apaisados y Communicator, y la resolución personalizada.
