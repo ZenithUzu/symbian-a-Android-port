@@ -62,6 +62,7 @@ jobs:
             adb install demo-output.apk
             adb shell monkey -p $(adb shell pm list packages | sed -n 's/package:\(com.j2a.game.g.*\)/\1/p' | tr -d '\r') 1
             sleep 5
+            python tests/menu_ui_smoke.py
             adb logcat -d -s AndroidRuntime:E > android-crashes.txt
             test ! -s android-crashes.txt || ! grep -q 'FATAL EXCEPTION' android-crashes.txt
       - uses: actions/upload-artifact@v4
@@ -72,5 +73,6 @@ jobs:
             demo-output.apk
             smoke-result.txt
             android-crashes.txt
+            menu-screenshots/*.png
           if-no-files-found: warn
 

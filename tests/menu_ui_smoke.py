@@ -1,0 +1,60 @@
+"""ADB integration test against a running demo port on a disposable emulator."""
+from pathlib import Path
+import subprocess
+import time
+import xml.etree.ElementTree as ET
+
+OUT = Path('menu-screenshots')
+OUT.mkdir(exist_ok=True)
+
+
+def adb(*args):
+    return subprocess.check_output(['adb', *args], text=True)
+
+
+def nodes():
+    adb('shell', 'uiautomator', 'dump', '/sdcard/menu.xml')
+    return ET.fromstring(adb('shell', 'cat', '/sdcard/menu.xml')).iter('node')
+
+
+def find(label):
+    for node in nodes():
+        if node.get('text', '').split(':')[0] == label:
+            return node
+    raise AssertionError('Missing menu option: ' + label)
+
+
+def tap(label):
+    import re
+    values = list(map(int, re.findall(r'\d+', find(label).get('bounds'))))
+    adb('shell', 'input', 'tap', str((values[0] + values[2]) // 2), str((values[1] + values[3]) // 2))
+
+
+def screenshot(name):
+    adb('shell', 'screencap', '-p', '/sdcard/menu.png')
+    adb('pull', '/sdcard/menu.png', str(OUT / (name + '.png')))
+
+
+adb('logcat', '-c')
+adb('shell', 'input', 'keyevent', '4')
+time.sleep(1)
+required = ['Pantalla', 'Filtros', 'Controles', 'Sonido', 'Rendimiento', 'Más opciones']
+for name in required:
+    find(name)
+assert not any('PLAYER CONSOLE' in n.get('text', '') or 'Centro de juego' in n.get('text', '') for n in nodes())
+screenshot('ajustes-vertical')
+for label, filename in [('Pantalla', 'pantalla'), ('Filtros', 'filtros'), ('Sonido', 'sonido'), ('Controles', 'controles')]:
+    tap(label)
+    screenshot(filename)
+    adb('shell', 'input', 'keyevent', '4')
+    find('Pantalla')
+adb('shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0')
+adb('shell', 'settings', 'put', 'system', 'user_rotation', '1')
+time.sleep(2)
+find('Pantalla')
+screenshot('ajustes-horizontal')
+adb('shell', 'input', 'keyevent', '4')
+assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismiss settings'
+crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
+assert 'FATAL EXCEPTION' not in crashes, crashes
+print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')

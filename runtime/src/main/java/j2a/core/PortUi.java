@@ -2,9 +2,11 @@ package j2a.core;
 
 import android.app.Activity;
 import android.app.Dialog;
-import android.graphics.Color;
+import android.content.res.Configuration;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
@@ -13,107 +15,57 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-/** Console dashboard shared by the port menu and its settings panels. No external UI dependency. */
+/** Compact settings sheet shared by game menus. */
 final class PortUi {
-    private static final int GOLD = Color.rgb(242, 191, 91);
-    private static final int INK = Color.rgb(231, 237, 247);
-    private static final int MUTED = Color.rgb(157, 175, 201);
-
-    private static int dp(Activity a, int n) {
-        return Math.round(n * a.getResources().getDisplayMetrics().density);
+    private PortUi() {}
+    private static int dp(Activity a, int n) { return Math.round(n * a.getResources().getDisplayMetrics().density); }
+    private static TextView text(Activity a, String label, int sp, int color) {
+        TextView v = new TextView(a); v.setText(label); v.setTextSize(sp); v.setTextColor(color); return v;
     }
-
-    private static GradientDrawable panel(int top, int bottom, int border, int radius) {
-        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{top, bottom});
-        d.setCornerRadius(radius);
-        d.setStroke(1, border);
-        return d;
-    }
-
-    private static TextView text(Activity a, String label, int size, int color, boolean bold) {
-        TextView t = new TextView(a);
-        t.setText(label);
-        t.setTextSize(size);
-        t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
-    }
-
     static void show(Activity a, String title, String[] labels, int checked,
                      java.util.function.IntConsumer pick, Runnable back, boolean dashboard) {
-        Dialog dialog = new Dialog(a);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        LinearLayout root = new LinearLayout(a);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(a, 18), dp(a, 16), dp(a, 18), dp(a, 12));
-        root.setBackground(panel(0xff202d45, 0xff0b1323, 0xff556682, dp(a, 18)));
-        root.addView(text(a, "J2A  /  PLAYER CONSOLE", 11, GOLD, true));
-        TextView heading = text(a, title, 23, INK, true);
-        heading.setPadding(0, dp(a, 6), 0, dp(a, 4));
-        root.addView(heading);
-        TextView subtitle = text(a, dashboard ? "PANTALLA · CONTROLES · SONIDO" : "AJUSTES DEL JUEGO  /  Se guardan automáticamente", 11, MUTED, false);
-        subtitle.setPadding(0, 0, 0, dp(a, 12));
-        root.addView(subtitle);
-        ScrollView scroll = new ScrollView(a);
-        scroll.setFillViewport(false);
-        LinearLayout body = new LinearLayout(a);
-        body.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(body);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        boolean dark = (a.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        int surface = dark ? 0xff202124 : 0xfffafafa;
+        int ink = dark ? 0xffedf0f3 : 0xff202124;
+        int muted = dark ? 0xffaeb5bf : 0xff59616c;
+        int accent = dark ? 0xffa8c7fa : 0xff215da8;
+        int line = dark ? 0xff393c42 : 0xffe5e7eb;
+        if (android.os.Build.VERSION.SDK_INT >= 31) accent = a.getColor(dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600);
+        final int highlight = accent;
+        Dialog dialog = new Dialog(a); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root = new LinearLayout(a); root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable background = new GradientDrawable(); background.setColor(surface); background.setCornerRadius(dp(a, 22)); root.setBackground(background);
+        LinearLayout header = new LinearLayout(a); header.setGravity(Gravity.CENTER_VERTICAL); header.setPadding(dp(a, 12), dp(a, 8), dp(a, 8), dp(a, 8));
+        TextView heading = text(a, title, 20, ink); heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD); heading.setPadding(dp(a, 12), 0, 0, 0); heading.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(heading, new LinearLayout.LayoutParams(0, dp(a, 48), 1));
+        TextView close = text(a, back == null ? "×" : "‹", 28, muted); close.setGravity(Gravity.CENTER); close.setContentDescription(back == null ? "Cerrar ajustes" : "Volver"); close.setFocusable(true);
+        header.addView(close, new LinearLayout.LayoutParams(dp(a, 48), dp(a, 48)));
+        close.setOnClickListener(v -> { dialog.dismiss(); if (back != null) back.run(); }); root.addView(header);
+        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics(); a.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+        android.graphics.Rect visible = new android.graphics.Rect(); a.getWindow().getDecorView().getWindowVisibleDisplayFrame(visible);
+        int availableHeight = visible.height() > 0 ? visible.height() : metrics.heightPixels;
+        final int maxBodyHeight = Math.max(dp(a, 96), (int)(availableHeight * .84f) - dp(a, 64));
+        ScrollView scroll = new ScrollView(a) {
+            @Override protected void onMeasure(int w, int h) { super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(maxBodyHeight, View.MeasureSpec.AT_MOST)); }
+        };
+        scroll.setClipToPadding(false); scroll.setPadding(dp(a, 8), 0, dp(a, 8), dp(a, 12));
+        LinearLayout body = new LinearLayout(a); body.setOrientation(LinearLayout.VERTICAL); scroll.addView(body); root.addView(scroll);
         for (int i = 0; i < labels.length; i++) {
-            final int index = i;
-            if (labels[i].startsWith("# ")) {
-                TextView section = text(a, labels[i].substring(2), 12, GOLD, true);
-                section.setPadding(dp(a, 3), dp(a, 16), 0, dp(a, 7));
-                body.addView(section);
-                continue;
-            }
-            LinearLayout card = new LinearLayout(a);
-            card.setGravity(Gravity.CENTER_VERTICAL);
-            card.setPadding(dp(a, 14), dp(a, 12), dp(a, 12), dp(a, 12));
-            card.setMinimumHeight(dp(a, 54));
-            card.setBackground(panel(i == checked ? 0xff455032 : 0xff2b3b56,
-                    i == checked ? 0xff283a2e : 0xff18263d, i == checked ? GOLD : 0xff41516c, dp(a, 9)));
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
-            cp.bottomMargin = dp(a, 7);
-            body.addView(card, cp);
-            TextView marker = text(a, i == checked ? "●" : dashboard ? "◆" : "◇", 17, GOLD, true);
-            card.addView(marker, new LinearLayout.LayoutParams(dp(a, 30), -2));
-            String label = labels[i];
-            int split = label.indexOf(": ");
-            LinearLayout words = new LinearLayout(a);
-            words.setOrientation(LinearLayout.VERTICAL);
-            words.addView(text(a, split >= 0 ? label.substring(0, split) : label, 15, INK, true));
-            if (split >= 0) words.addView(text(a, label.substring(split + 2), 13, MUTED, false));
-            card.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
-            card.addView(text(a, "›", 24, GOLD, false));
-            card.setFocusable(true);
-            card.setClickable(true);
-            card.setContentDescription(label);
-            card.setOnFocusChangeListener((v, focused) -> v.setAlpha(focused ? 1f : .9f));
-            card.setOnClickListener(v -> { dialog.dismiss(); pick.accept(index); });
+            final int index = i; String label = labels[i];
+            if (label.startsWith("# ")) { TextView section = text(a, label.substring(2), 12, muted); section.setPadding(dp(a, 16), dp(a, 14), dp(a, 16), dp(a, 5)); body.addView(section); continue; }
+            LinearLayout row = new LinearLayout(a); row.setGravity(Gravity.CENTER_VERTICAL); row.setMinimumHeight(dp(a, 52)); row.setPadding(dp(a, 16), dp(a, 10), dp(a, 16), dp(a, 10));
+            GradientDrawable fill = new GradientDrawable(); fill.setColor(i == checked ? (dark ? 0xff303b4c : 0xffe7effa) : surface); fill.setCornerRadius(dp(a, 12));
+            row.setBackground(new RippleDrawable(ColorStateList.valueOf(dark ? 0x33ffffff : 0x22000000), fill, null));
+            int split = label.indexOf(": "); LinearLayout words = new LinearLayout(a); words.setOrientation(LinearLayout.VERTICAL);
+            words.addView(text(a, split < 0 ? label : label.substring(0, split), 16, ink));
+            if (split >= 0) { TextView value = text(a, label.substring(split + 2), 13, muted); value.setPadding(0, dp(a, 3), 0, 0); words.addView(value); }
+            row.addView(words, new LinearLayout.LayoutParams(0, -2, 1)); if (i == checked) row.addView(text(a, "✓", 20, highlight));
+            row.setFocusable(true); row.setClickable(true); row.setContentDescription(label + (i == checked ? ", seleccionado" : ""));
+            row.setOnClickListener(v -> { dialog.dismiss(); pick.accept(index); }); row.setOnFocusChangeListener((v, focused) -> fill.setStroke(focused ? dp(a, 2) : 0, highlight)); body.addView(row);
+            if (dashboard && i < labels.length - 1) { View divider = new View(a); divider.setBackgroundColor(line); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(a, 1)); p.setMargins(dp(a, 16), 0, dp(a, 16), 0); body.addView(divider, p); }
         }
-        TextView close = text(a, back == null ? "▶  VOLVER AL JUEGO" : "‹  VOLVER", 13, GOLD, true);
-        close.setGravity(Gravity.CENTER);
-        close.setPadding(0, dp(a, 16), 0, dp(a, 12));
-        close.setFocusable(true);
-        close.setOnClickListener(v -> { dialog.dismiss(); if (back != null) back.run(); });
-        root.addView(close);
-        dialog.setContentView(root);
-        dialog.setOnCancelListener(d -> { if (back != null) back.run(); });
-        Window w = dialog.getWindow();
-        if (w != null) {
-            w.setBackgroundDrawableResource(android.R.color.transparent);
-            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            WindowManager.LayoutParams lp = w.getAttributes();
-            lp.dimAmount = .72f;
-            w.setAttributes(lp);
-        }
-        dialog.show();
-        if (w != null) {
-            android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
-            a.getWindowManager().getDefaultDisplay().getMetrics(metrics);
-            w.setLayout(Math.min(dp(a, 620), (int)(metrics.widthPixels * .94f)), (int)(metrics.heightPixels * .88f));
-        }
+        dialog.setContentView(root); dialog.setOnCancelListener(d -> { if (back != null) back.run(); }); Window window = dialog.getWindow();
+        if (window != null) { window.setBackgroundDrawableResource(android.R.color.transparent); window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND); WindowManager.LayoutParams p = window.getAttributes(); p.dimAmount = .45f; window.setAttributes(p); }
+        dialog.show(); if (window != null) window.setLayout(Math.min(dp(a, 440), (int)(metrics.widthPixels * .92f)), WindowManager.LayoutParams.WRAP_CONTENT);
     }
 }

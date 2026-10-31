@@ -489,8 +489,37 @@ public final class Host {
         });
     }
 
-    /** Port menu: opened with Android's back gesture/button (or Menu/Escape). */
     static void showPortMenu() {
+        runOnUi(() -> PortUi.show(activity, "Ajustes", new String[]{
+                "Pantalla: " + cfg.screenWidth + " × " + cfg.screenHeight,
+                "Filtros: " + Shaders.label(activity, cfg.shader),
+                "Controles", "Sonido: " + (cfg.sound ? "Activado" : "Desactivado"),
+                "Rendimiento", "Más opciones"}, -1, which -> {
+                    switch (which) {
+                        case 0: showSettings("Pantalla"); break;
+                        case 1: showFiltersMenu(); break;
+                        case 2: showControlsMenu(); break;
+                        case 3: showAudioMenu(); break;
+                        case 4: showSettings("Rendimiento"); break;
+                        default: showSettings("Más opciones"); break;
+                    }
+                }, null, true));
+    }
+
+    private static void showAudioMenu() {
+        list("Sonido", new String[]{"Sonido: " + (cfg.sound ? "Activado" : "Desactivado"),
+                "Vibración: " + (cfg.vibration ? "Activada" : "Desactivada")}, which -> {
+            if (which == 0) {
+                cfg.sound = !cfg.sound;
+                if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
+                else javax.microedition.media.Manager.j2aPauseAll();
+            } else cfg.vibration = !cfg.vibration;
+            settingsChanged(); showAudioMenu();
+        }, Host::showPortMenu);
+    }
+
+    /** Port menu: opened with Android's back gesture/button (or Menu/Escape). */
+    private static void showSettings(String category) {
         runOnUi(() -> {
             final java.util.List<String> labels = new java.util.ArrayList<>();
             final java.util.List<Runnable> actions = new java.util.ArrayList<>();
@@ -554,8 +583,28 @@ public final class Host {
             });
             item.accept("Salir del juego", Host::requestExit);
 
-            PortUi.show(activity, "Centro de juego", labels.toArray(new String[0]), -1,
-                    which -> actions.get(which).run(), null, true);
+            java.util.List<String> filtered = new java.util.ArrayList<>();
+            java.util.List<Runnable> callbacks = new java.util.ArrayList<>();
+            String section = "";
+            for (int i = 0; i < labels.size(); i++) {
+                String label = labels.get(i);
+                if (label.startsWith("# ")) { section = label.substring(2); continue; }
+                boolean display = section.equals("IMAGEN Y PANTALLA") || label.startsWith("Centrar imagen") || label.startsWith("Ajuste automático");
+                boolean performance = section.equals("RENDIMIENTO");
+                boolean more = section.equals("HERRAMIENTAS") || section.equals("PARTIDA");
+                if (label.contains("Continuar") || label.startsWith("Filtros:")) continue;
+                if (!(category.equals("Pantalla") && display || category.equals("Rendimiento") && performance || category.equals("Más opciones") && more)) continue;
+                filtered.add(label.replace("Tecla izquierda del juego (menú / aceptar)", "Tecla izquierda")
+                        .replace("Tecla derecha del juego (atrás / pausa)", "Tecla derecha")
+                        .replace("Girar imagen del juego", "Giro de imagen")
+                        .replace("Anti-parpadeo (mezclar fotogramas)", "Reducir parpadeo")
+                        .replace("Ajuste automático de resolución", "Detectar área visible"));
+                final Runnable action = actions.get(i);
+                boolean toggle = label.startsWith("Mostrar FPS:") || label.startsWith("Anti-parpadeo") || label.startsWith("Centrar imagen:") || label.startsWith("Ajuste automático");
+                callbacks.add(() -> { action.run(); if (toggle) showSettings(category); });
+            }
+            PortUi.show(activity, category, filtered.toArray(new String[0]), -1,
+                    which -> callbacks.get(which).run(), Host::showPortMenu, false);
         });
     }
 
@@ -698,12 +747,12 @@ public final class Host {
         for (int i = 0; i < 3; i++) {
             String name = "Ninguno";
             for (Shaders.Def d : i == 0 ? scalers : effects) if (d.id.equals(slot[i])) name = d.label;
-            items[i] = (i == 0 ? "Filtro 1 (escalado): " : "Filtro " + (i + 1) + " (efecto): ") + name;
+            items[i] = (i == 0 ? "Escalado: " : "Efecto " + i + ": ") + name;
         }
         items[3] = "Perfiles de imagen…";
         items[4] = "Restablecer: píxeles originales";
         items[5] = "Intensidad de efectos integrados: " + cfg.effectStrength + "%";
-        list("Imagen · escalado y efectos", items, which -> {
+        list("Filtros", items, which -> {
             if (which == 5) {
                 final int[] strengths = {0, 25, 50, 75, 100};
                 choose("Intensidad · CRT, LCD, scanlines y color", new String[]{"0% · sin efecto", "25% · sutil", "50% · equilibrado", "75% · marcado", "100% · completo"},

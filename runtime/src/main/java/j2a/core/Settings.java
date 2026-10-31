@@ -26,6 +26,7 @@ final class Settings {
         c.frameBlend = p.getBoolean("frame.blend", c.frameBlend);
         c.fpsLimit = p.getInt("fps.limit", c.fpsLimit);
         c.sound = p.getBoolean("sound", c.sound);
+        c.vibration = p.getBoolean("vibration", c.vibration);
         c.screenWidth = p.getInt("screen.width", c.screenWidth);
         c.screenHeight = p.getInt("screen.height", c.screenHeight);
         c.expandedViewport = p.getBoolean("viewport.expanded", false);
@@ -70,6 +71,7 @@ final class Settings {
                 .putBoolean("frame.blend", c.frameBlend)
                 .putInt("fps.limit", c.fpsLimit)
                 .putBoolean("sound", c.sound)
+                .putBoolean("vibration", c.vibration)
                 .putString("orientation", c.orientation)
                 .putBoolean("auto.fit", c.autoFit)
                 .putInt("rotate.choice", c.rotate)
