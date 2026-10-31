@@ -19,7 +19,7 @@ def nodes():
 
 def find(label):
     for node in nodes():
-        if node.get('text', '').split(':')[0].casefold() == label.casefold():
+        if (node.get('text') or node.get('content-desc', '')).split(':')[0].casefold() == label.casefold():
             return node
     raise AssertionError('Missing menu option: ' + label)
 
@@ -64,5 +64,6 @@ assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismi
 crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
 assert 'FATAL EXCEPTION' not in crashes, crashes
 print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')
+
 
 
