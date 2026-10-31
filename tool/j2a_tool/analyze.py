@@ -130,6 +130,7 @@ def analyze(jar, jad=None):
         "bundled_platform_classes": bundled_platform,
         "unreadable_classes": bad,
         "screen_hints": suite.screen_hints(),
+        "screen_detection": suite.screen_detection(),
         "orientation_hint": suite.orientation_hint(),
         "uses_network": any(c.startswith("javax/microedition/io/") for c in used),
         "touch": bool(touch_classes),
@@ -219,6 +220,11 @@ def print_report(r):
         p("Pistas de resolución: " + "; ".join("%dx%d (%s)" % h for h in r["screen_hints"]))
     else:
         p("Sin pistas de resolución: se usará 240x320 (cámbialo con --screen)")
+    detection = r.get('screen_detection')
+    if detection:
+        p('Resolución automática: %dx%d · confianza %s' % (detection['width'], detection['height'], detection['confidence']))
+        if detection['confidence'] == 'baja':
+            p('Las pistas son insuficientes o contradictorias; se conserva AutoFit y el ajuste dentro del juego.')
     mode, ask = r["keypad_hint"]
     if mode == "none":
         p("Táctil: el juego trae sus propios controles en pantalla -> sin teclado virtual")

@@ -152,40 +152,16 @@ class MidletSuite:
         return None
 
     # --------------------------------------------------------------- screens
+    def screen_detection(self):
+        from .resolution import detect
+        if not hasattr(self, '_screen_detection'):
+            self._screen_detection = detect(self, COMMON_SCREENS, DEVICE_SCREENS)
+        return self._screen_detection
+
     def screen_hints(self):
-        """Returns a list of (width, height, reason), most reliable first."""
-        hints = []
-        for key in ("Nokia-MIDlet-Original-Display-Size", "Nokia-MIDlet-Target-Display-Size",
-                    "MIDlet-Screen-Size", "J2A-Screen-Size"):
-            v = self.attrs.get(key)
-            if v:
-                m = re.search(r"(\d{2,4})\s*[,x*]\s*(\d{2,4})", v)
-                if m:
-                    hints.append((int(m.group(1)), int(m.group(2)), key))
-        names = [os.path.basename(self.jar_path)] + ([os.path.basename(self.jad_path)] if self.jad_path else [])
-        names += [self.attrs.get(k, "") for k in ("MIDlet-Jar-URL", "MIDlet-Name", "MIDlet-Description")]
-        text = " ".join(names).lower()
-        for m in re.finditer(r"(?<!\d)(\d{2,4})\s*[x*_-]\s*(\d{2,4})(?!\d)", text):
-            w, h = int(m.group(1)), int(m.group(2))
-            if 64 <= w <= 2048 and 64 <= h <= 2048:
-                hints.append((w, h, "nombre del archivo"))
-        squashed = re.sub(r"[\s_.]+", "", text)
-        for w, h, models in DEVICE_SCREENS:
-            for model in models.split():
-                pat = r"(?<![a-z0-9])%s(?![0-9])" % re.escape(model)
-                if re.search(pat, text) or (len(model) > 4 and re.search(pat, squashed)):
-                    hints.append((w, h, "modelo de teléfono '%s'" % model))
-                    break
-        png_screens, widths = self.png_stats()
-        for (w, h), n in png_screens.most_common(2):
-            hints.append((w, h, "%d imagen(es) del tamaño de pantalla" % n))
-        pair = self.bytecode_screen()
-        if pair:
-            w, h, n = pair
-            if (w, h) != (h, w) and widths[h] > widths[w]:
-                w, h = h, w  # more images as wide as the long side -> landscape
-            hints.append((w, h, "constantes %dx%d en %d clase(s) del código" % (w, h, n)))
-        return hints
+        detection = self.screen_detection()
+        return [(c['width'], c['height'], '; '.join(c['reasons']))
+                for c in detection['candidates']]
 
     def png_stats(self):
         """(Counter of screen-sized PNGs, Counter of PNG widths)."""

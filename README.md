@@ -175,6 +175,19 @@ Todo se guarda entre sesiones.
 
 ## Resoluciones y widescreen dentro del juego
 
+La herramienta elige automáticamente la resolución al importar y generar cada juego, y muestra
+**resolución y confianza** en la lista. Compara declaraciones de JAR/JAD, nombre de la versión,
+modelo, cabeceras PNG/GIF/JPEG y tamaños reales usados en llamadas Graphics e Image.createImage.
+Las declaraciones explícitas tienen prioridad; las demás pistas se combinan con puntuaciones
+limitadas por fuente para evitar que muchos sprites o constantes casuales dominen la decisión.
+Los iconos declarados, atlas, fuentes y hojas de sprites se descartan como pruebas de pantalla.
+`analyze --json` incluye candidatos, puntuaciones y motivos; el registro del port explica la elección.
+
+Si faltan datos o las pistas empatan, muestra **confianza baja**. Sin ninguna pista usa 240x320
+como valor de compatibilidad, no como resolución confirmada. AutoFit y el menú de resolución
+siguen disponibles. El análisis estático no puede garantizar el tamaño de todos los juegos
+ofuscados, adaptables o con recursos cifrados; la CLI conserva `--screen` como corrección explícita.
+
 En **Centro de juego → Resolución**, primero aparecen la resolución original y las pistas encontradas
 en el manifiesto, JAD, nombre, imágenes y código del JAR. Son recomendaciones detectadas, no garantía
 de que el juego soporte todas ellas. Después están 40 perfiles clásicos y tamaños alternativos,

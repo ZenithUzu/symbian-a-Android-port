@@ -80,9 +80,11 @@ def game_info(jar):
     try:
         suite = MidletSuite(jar)
         midlets = suite.midlets()
-        return suite.name, generate.official_package(suite, midlets[0]["class"] if midlets else None)
+        result = suite.name, generate.official_package(suite, midlets[0]["class"] if midlets else None), suite.screen_detection()
+        suite.zip.close()
+        return result
     except Exception:  # noqa: BLE001 - unreadable jar: the port itself will explain
-        return os.path.splitext(os.path.basename(jar))[0], "?"
+        return os.path.splitext(os.path.basename(jar))[0], "?", None
 
 
 def build_args(v):
@@ -132,7 +134,9 @@ def run_one(argv, q):
 class Game:
     def __init__(self, jar):
         self.jar = jar
-        self.auto_name, self.auto_package = game_info(jar)
+        self.auto_name, self.auto_package, self.detection = game_info(jar)
+        d = self.detection
+        self.screen_label = '%dx%d · %s' % (d['width'], d['height'], d['confidence']) if d else 'No detectada'
         self.name = self.package = self.folder = ""  # "" = automático
         self.status = "Pendiente"
 
@@ -164,9 +168,9 @@ class App(BaseTk):
         self.list_frame = tk.Frame(f, bg=LCD, highlightthickness=2, highlightbackground=LCD_INK)
         self.list_frame.grid(row=2, column=0, sticky="nsew")
         f.rowconfigure(2, weight=1, minsize=150)
-        self.tree = ttk.Treeview(self.list_frame, columns=("name", "pkg", "out", "status"), show="headings",
+        self.tree = ttk.Treeview(self.list_frame, columns=("name", "pkg", "screen", "out", "status"), show="headings",
                                  style="LCD.Treeview", selectmode="extended", height=6)
-        for col, text, w in (("name", "Juego", 170), ("pkg", "Paquete", 180), ("out", "Se guarda en", 230),
+        for col, text, w in (("name", "Juego", 170), ("pkg", "Paquete", 150), ("screen", "Resolución · confianza", 160), ("out", "Se guarda en", 200),
                              ("status", "Estado", 110)):
             self.tree.heading(col, text=text, anchor="w")
             self.tree.column(col, width=w, minwidth=60, anchor="w", stretch=col in ("name", "out"))
@@ -341,7 +345,7 @@ class App(BaseTk):
             out = g.out(root)  # the full path is in the edit window; here the part that tells them apart
             short = os.path.join("…", os.path.basename(os.path.dirname(out)), os.path.basename(out))
             self.tree.insert("", "end", iid=jar, values=(g.name or g.auto_name, g.package or g.auto_package,
-                                                         short, g.status),
+                                                         g.screen_label, short, g.status),
                              tags=("bad",) if g.status == "Falló" else ())
         if self.games:
             self.empty.place_forget()

@@ -126,6 +126,9 @@ def pick_screen(args, report):
         if not m:
             raise SystemExit("--screen debe tener el formato ANCHOxALTO, por ejemplo 240x320")
         return int(m.group(1)), int(m.group(2)), "--screen"
+    if report.get('screen_detection'):
+        d = report['screen_detection']
+        return d['width'], d['height'], 'detección %s: %s' % (d['confidence'], d['reason'])
     if report["screen_hints"]:
         return report["screen_hints"][0]
     return 240, 320, "valor por defecto"
