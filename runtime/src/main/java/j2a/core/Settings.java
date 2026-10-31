@@ -14,6 +14,7 @@ final class Settings {
         c.keypad = p.getString("keypad", c.keypad);
         c.scaleMode = p.getString("scale.mode", c.scaleMode);
         c.shader = p.getString("shader", c.shader);
+        c.effectStrength = Math.max(0, Math.min(100, p.getInt("effect.strength", c.effectStrength)));
         c.fpsMode = p.getString("fps.mode", c.fpsMode);
         c.keypadAlpha = p.getInt("keypad.alpha", c.keypadAlpha);
         c.padScale = p.getInt("pad.scale", c.padScale);
@@ -55,6 +56,7 @@ final class Settings {
                 .putString("keypad", c.keypad)
                 .putString("scale.mode", c.scaleMode)
                 .putString("shader", c.shader)
+                .putInt("effect.strength", c.effectStrength)
                 .putString("fps.mode", c.fpsMode)
                 .putInt("keypad.alpha", c.keypadAlpha)
                 .putInt("pad.scale", c.padScale)

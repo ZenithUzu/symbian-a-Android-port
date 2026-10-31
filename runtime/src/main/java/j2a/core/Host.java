@@ -496,9 +496,11 @@ public final class Host {
             final java.util.List<Runnable> actions = new java.util.ArrayList<>();
             java.util.function.BiConsumer<String, Runnable> item = (l, r) -> { labels.add(l); actions.add(r); };
 
+            item.accept("# PARTIDA", () -> {});
             item.accept("▶ Continuar", () -> {});
             item.accept("Tecla izquierda del juego (menú / aceptar)", () -> tapKey(Keys.SOFT_LEFT));
             item.accept("Tecla derecha del juego (atrás / pausa)", () -> tapKey(Keys.SOFT_RIGHT));
+            item.accept("# IMAGEN Y PANTALLA", () -> {});
             item.accept("Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight, Host::pickResolution);
             item.accept("Rotación: " + (cfg.orientation.length() == 0 || "auto".equals(cfg.orientation) ? "la del teléfono"
                     : "portrait".equals(cfg.orientation) ? "vertical" : "horizontal"), () ->
@@ -519,6 +521,7 @@ public final class Host {
                                     "16:9 (usa casi toda la pantalla, deforma poco)", "Completa (estira hasta llenar todo)"},
                             new String[]{"fit", "integer", "wide", "stretch"}, cfg.scaleMode, null, "scale"));
             item.accept("Filtros: " + Shaders.label(activity, cfg.shader), Host::showFiltersMenu);
+            item.accept("# RENDIMIENTO", () -> {});
             item.accept("Modo de FPS: " + cfg.fpsMode, () ->
                     pick("Modo de FPS", new String[]{"Sincronizado con la pantalla (vsync)",
                                     "Dinámico (la pantalla se adapta a los FPS del juego)", "Sin límite"},
@@ -530,6 +533,7 @@ public final class Host {
             item.accept("Mostrar FPS: " + (cfg.showFps ? "sí" : "no"), () -> toggle(() -> cfg.showFps = !cfg.showFps));
             item.accept("Anti-parpadeo (mezclar fotogramas): " + (cfg.frameBlend ? "sí" : "no"),
                     () -> toggle(() -> cfg.frameBlend = !cfg.frameBlend));
+            item.accept("# CONTROLES Y AUDIO", () -> {});
             item.accept("Controles…", Host::showControlsMenu);
             item.accept("Centrar imagen: " + (cfg.center ? "sí" : "no"), () -> toggle(() -> cfg.center = !cfg.center));
             item.accept("Sonido: " + (cfg.sound ? "sí" : "no"), () -> toggle(() -> {
@@ -541,6 +545,7 @@ public final class Host {
                 cfg.autoFit = !cfg.autoFit;
                 if (!cfg.autoFit) AutoFit.disable();
             }));
+            item.accept("# HERRAMIENTAS", () -> {});
             item.accept("Captura de pantalla", () -> Screenshot.save(activity, gl.snapshot()));
             item.accept("Restablecer opciones", () -> {
                 Settings.reset(activity);
@@ -548,10 +553,8 @@ public final class Host {
             });
             item.accept("Salir del juego", Host::requestExit);
 
-            new AlertDialog.Builder(activity)
-                    .setTitle("Menú del port")
-                    .setItems(labels.toArray(new String[0]), (dlg, which) -> actions.get(which).run())
-                    .show();
+            PortUi.show(activity, "Centro de juego", labels.toArray(new String[0]), -1,
+                    which -> actions.get(which).run(), null, true);
         });
     }
 
@@ -561,24 +564,17 @@ public final class Host {
 
     /** A list dialog; picking runs the action, and the Back key returns to 'back' (the menu above). */
     private static void list(String title, String[] items, java.util.function.IntConsumer onPick, Runnable back) {
-        AlertDialog.Builder b = new AlertDialog.Builder(activity).setTitle(title)
-                .setItems(items, (dlg, which) -> onPick.accept(which));
-        if (back != null) b.setOnCancelListener(d -> back.run());
-        b.show();
+        PortUi.show(activity, title, items, -1, onPick, back, false);
     }
 
     /** Single choice; after picking (or Back) the menu above opens again instead of the game. */
     private static void choose(String title, String[] items, int checked, java.util.function.IntConsumer onPick,
                                Runnable back) {
-        AlertDialog.Builder b = new AlertDialog.Builder(activity).setTitle(title)
-                .setSingleChoiceItems(items, checked, (dlg, which) -> {
-                    dlg.dismiss();
+        PortUi.show(activity, title, items, checked, which -> {
                     onPick.accept(which);
                     settingsChanged();
                     if (back != null) back.run();
-                });
-        if (back != null) b.setOnCancelListener(d -> back.run());
-        b.show();
+                }, back, false);
     }
 
     /** Everything about the controls, in its own list so the main menu stays short. */
@@ -697,7 +693,7 @@ public final class Host {
         }
         if (slot[0].isEmpty()) slot[0] = "nearest";
         final Runnable back = Host::showFiltersMenu;
-        String[] items = new String[5];
+        String[] items = new String[6];
         for (int i = 0; i < 3; i++) {
             String name = "Ninguno";
             for (Shaders.Def d : i == 0 ? scalers : effects) if (d.id.equals(slot[i])) name = d.label;
@@ -705,9 +701,19 @@ public final class Host {
         }
         items[3] = "Perfiles de imagen…";
         items[4] = "Restablecer: píxeles originales";
+        items[5] = "Intensidad de efectos integrados: " + cfg.effectStrength + "%";
         list("Imagen · escalado y efectos", items, which -> {
+            if (which == 5) {
+                final int[] strengths = {0, 25, 50, 75, 100};
+                choose("Intensidad · CRT, LCD, scanlines y color", new String[]{"0% · sin efecto", "25% · sutil", "50% · equilibrado", "75% · marcado", "100% · completo"},
+                        java.util.Arrays.binarySearch(strengths, cfg.effectStrength), k -> {
+                            cfg.effectStrength = strengths[k]; gl.requestRender();
+                        }, back);
+                return;
+            }
             if (which == 4) {
                 cfg.shader = "nearest";
+                cfg.effectStrength = 100;
                 gl.requestRender();
                 settingsChanged();
                 showFiltersMenu();
@@ -797,11 +803,7 @@ public final class Host {
     private static void pick(String title, String[] labels, final String[] values, String current,
                              final Runnable after, final String field) {
         int checked = java.util.Arrays.asList(values).indexOf(current);
-        new AlertDialog.Builder(activity)
-                .setTitle(title)
-                .setSingleChoiceItems(labels, checked, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dlg, int which) {
-                        dlg.dismiss();
+        choose(title, labels, checked, which -> {
                         String v = values[which];
                         if (field.equals("orientation")) cfg.orientation = v;
                         else if (field.equals("scale")) cfg.scaleMode = v;
@@ -814,10 +816,7 @@ public final class Host {
 
                         else if (field.equals("rotate")) cfg.rotate = Integer.parseInt(v);
                         if (after != null) after.run();
-                        settingsChanged();
-                    }
-                })
-                .show();
+                }, Host::showPortMenu);
     }
 
     /** Classic phone sizes plus a widescreen mode that matches this device's aspect ratio. */

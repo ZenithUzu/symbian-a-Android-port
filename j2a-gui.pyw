@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "too
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog, messagebox, ttk  # noqa: E402
 
-from j2a_tool import cli, generate, paths  # noqa: E402
+from j2a_tool import adb, cli, generate, paths  # noqa: E402
 from j2a_tool.jarinfo import MidletSuite  # noqa: E402
 
 try:  # optional: drop .jar files onto the window (pip install tkinterdnd2; j2a-gui.bat installs it)
@@ -45,6 +45,7 @@ SCALERS = SHADERS[:6]
 EFFECTS = [("Sin efecto", ""), ("CRT · curvatura", "crt"), ("CRT Lottes · televisión", "crt-lottes"),
            ("Scanlines", "scanlines"), ("LCD · teléfono clásico", "lcd"),
            ("Matriz de puntos", "dot"), ("LCD verde", "mono")]
+EFFECTS += [("Color vivo", "vivid"), ("Ámbar cálido", "warm")]
 PRESETS = [("Original", "nearest", "", "integer"), ("Equilibrado", "sharp", "", "fit"),
            ("Pixel art", "mmpx", "", "integer"), ("Televisión", "sharp", "crt-lottes", "fit"),
            ("Teléfono clásico", "nearest", "lcd", "integer")]
@@ -128,6 +129,8 @@ def build_args(v):
         a.append("--force")
     if v.get("apk", True):
         a.append("--apk")
+    if v.get("install"):
+        a += ["--install", "--device", v["device"]]
     return a
 
 
@@ -256,12 +259,17 @@ class App(BaseTk):
             row=r, column=2, columnspan=2, sticky="w")
         ttk.Button(self.opts, text="Comprobar Java y Android SDK", command=lambda: self.run([["doctor"]])).grid(
             row=r + 1, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        self.vars["apk"] = tk.BooleanVar(value=True)
-        ttk.Checkbutton(self.opts, text="Compilar APK instalable al terminar", variable=self.vars["apk"]).grid(
-            row=r + 1, column=2, columnspan=2, sticky="w", pady=(8, 0))
+        self.combo(self.opts, r + 2, 0, "Entrega", "delivery", [
+            ("APK instalable", "apk"), ("Proyecto de Android Studio", "project"), ("APK + instalar por ADB", "install")])
+        self.vars["device"] = tk.StringVar()
+        self.device_combo = ttk.Combobox(self.opts, textvariable=self.vars["device"], state="readonly", width=28)
+        self.device_combo.grid(row=r + 2, column=2, sticky="ew")
+        ttk.Button(self.opts, text="Buscar ADB", command=self.scan_adb).grid(row=r + 2, column=3, padx=6)
+        self.adb_status = tk.StringVar(value="ADB: conecta Android y autoriza la depuración USB.")
+        ttk.Label(self.opts, textvariable=self.adb_status, style="Muted.TLabel").grid(row=r + 3, column=0, columnspan=4, sticky="w")
         ttk.Label(self.opts, text="Los efectos se aplican sobre el escalado. xBR y CRT pueden consumir más GPU.\n"
                   "La APK usa firma de depuración. La primera compilación necesita internet y el SDK de Android.",
-                  style="Muted.TLabel").grid(row=r + 2, column=0, columnspan=4, sticky="w", pady=8)
+                  style="Muted.TLabel").grid(row=r + 4, column=0, columnspan=4, sticky="w", pady=8)
         self.opts.grid(row=6, column=0, sticky="ew")
         self.update_options_label()
 
@@ -297,6 +305,17 @@ class App(BaseTk):
             messagebox.showinfo("Trabajo en curso", "Espera a que termine la tarea antes de cerrar la ventana.")
         else:
             self.destroy()
+
+    def scan_adb(self):
+        if self.busy:
+            return
+        self.adb_status.set("Buscando dispositivos ADB…")
+        def scan():
+            try:
+                self.q.put(("adb", adb.devices(), None))
+            except Exception as error:
+                self.q.put(("adb", [], str(error)))
+        threading.Thread(target=scan, daemon=True).start()
 
     # ----------------------------------------------------------------- look
     def style_window(self):
@@ -374,7 +393,8 @@ class App(BaseTk):
         else:
             self.empty.place(relx=0.5, rely=0.5, anchor="center")
         n = len(self.games)
-        self.go.configure(text="Generar APK" if n == 1 else "Generar %d APKs" % n if n else "Generar APKs")
+        action = {"apk": "Generar APK", "project": "Crear proyecto Android", "install": "Crear e instalar APK"}[self.value("delivery")]
+        self.go.configure(text=action + (" · %d juegos" % n if n > 1 else ""))
 
     def add_paths(self, paths_):
         if self.busy:
@@ -461,6 +481,8 @@ class App(BaseTk):
                    if self.vars[k].get() != self.vars[k + "#default"]]
         summary = "todo automático" if not changed else ", ".join(changed)
         self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Opciones: " + summary)
+        if hasattr(self, "go"):
+            self.refresh()
 
     def apply_preset(self, scaler, effect, scale):
         if self.busy:
@@ -516,7 +538,12 @@ class App(BaseTk):
         effect = self.value("effect")
         if effect:
             v["shader"] += "+" + effect
-        v["apk"] = self.vars["apk"].get()
+        v["apk"] = self.value("delivery") != "project"
+        v["install"] = self.value("delivery") == "install"
+        v["device"] = self.vars["device"].get()
+        if v["install"] and not v["device"]:
+            messagebox.showwarning("Selecciona Android", "Pulsa Buscar ADB y selecciona un dispositivo autorizado.")
+            return
         folders = [os.path.normcase(os.path.abspath(g.out(root))) for g in self.games.values()]
         if len(set(folders)) != len(folders):
             messagebox.showwarning("Carpetas repetidas", "Dos juegos usan la misma carpeta. Cambia la carpeta de uno con doble clic.")
@@ -536,7 +563,10 @@ class App(BaseTk):
             if g in existing and not replace:
                 g.status = "En cola" if v["apk"] else "Ya existe"
                 if v["apk"]:
-                    jobs.append((g.jar, ["build", g.out(root)]))
+                    args = ["build", g.out(root)]
+                    if v["install"]:
+                        args += ["--install", "--device", v["device"]]
+                    jobs.append((g.jar, args))
                 continue
             g.status = "En cola"
             jobs.append((g.jar, build_args(dict(v, jar=g.jar, out=g.out(root), name=g.name, package=g.package,
@@ -587,9 +617,9 @@ class App(BaseTk):
                 ok = run_one(argv, self.q)
                 failed += not ok
                 if jar:
-                    self.q.put(("status", jar, ("APK lista" if "--apk" in argv or argv[0] == "build" else "Proyecto listo") if ok else "Falló"))
+                    self.q.put(("status", jar, ("Instalado" if "--install" in argv else "APK lista" if "--apk" in argv or argv[0] == "build" else "Proyecto listo") if ok else "Falló"))
             n = len(jobs)
-            self.q.put(("done", failed, ("Listo: %d trabajo(s). APKs en la carpeta apk de cada proyecto." % n
+            self.q.put(("done", failed, ("Listo: %d trabajo(s). Consulta el estado de cada juego." % n
                                          if not failed else "%d de %d fallaron: mira los detalles." % (failed, n))
                         if jobs[0][0] else ""))
 
@@ -601,6 +631,13 @@ class App(BaseTk):
                 item = self.q.get_nowait()
                 if not isinstance(item, tuple):
                     self.write(item)
+                elif item[0] == "adb":
+                    _, devices, error = item
+                    ready = [d["serial"] for d in devices if d["state"] == "device"]
+                    self.device_combo.configure(values=ready)
+                    if self.vars["device"].get() not in ready:
+                        self.vars["device"].set(ready[0] if len(ready) == 1 else "")
+                    self.adb_status.set(error or "; ".join(d["serial"] + ": " + d["state"] for d in devices) or "Sin dispositivos. Activa depuración USB y acepta la autorización.")
                 elif item[0] == "status":
                     g = self.games.get(item[1])
                     if g:

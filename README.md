@@ -28,6 +28,26 @@ python tool/j2a.py doctor      # comprueba Java, SDK y descompiladores
 
 ### APK lista con j2a Studio
 
+La interfaz ofrece tres destinos en **Entrega**: proyecto de Android Studio, APK instalable,
+o APK con instalación por ADB. Para ADB, instala Platform-Tools, activa la depuración USB
+y acepta la autorización en el dispositivo. Pulsa **Buscar ADB** y elige el serial de tu
+teléfono o emulador autorizado. La instalación usa `adb -s SERIAL install -r`: conserva datos
+cuando la firma y Android permiten actualizar. Si la firma es incompatible, muestra el error;
+no desinstala el juego ni borra partidas automáticamente.
+
+```powershell
+python tool/j2a.py port MiJuego.jar --install --device SERIAL
+python tool/j2a.py build MiJuego-android --install --device SERIAL
+```
+
+Dentro de cada juego, el **Centro de juego** reemplaza la lista Android básica por un panel
+de consola oscuro con detalles dorados, tarjetas, valores seleccionados y secciones. Los paneles
+de controles y filtros usan el mismo estilo y se pueden recorrer con teclado o mando.
+Los efectos integrados CRT, scanlines, LCD, LCD verde, Color vivo y Ámbar tienen intensidad
+ajustable y persistente de 0 a 100%. Los shaders externos y los de RetroArch conservan sus
+propios parámetros (la intensidad integrada no modifica CRT Lottes ni Matriz de puntos).
+Esto cambia los menús del port; conserva la interfaz original dibujada por cada juego J2ME.
+
 La interfaz compila una **APK instalable** por defecto. Añade tus JAR, elige un perfil de imagen
 y pulsa **Generar APKs**. El resultado está en `<proyecto>/apk/`; **Abrir carpeta** abre esa carpeta
 cuando ya existe. La primera compilación descarga Gradle y sus dependencias: necesita internet,
@@ -55,7 +75,7 @@ python tool/j2a.py build MiJuego-android -o MisAPKs
 Si una compilación falla, el proyecto permanece disponible y `apk-build.log` contiene el registro.
 Puedes corregir el SDK o el código y repetir `build` sin volver a generar ni perder tus cambios.
 En la interfaz, al encontrar un proyecto existente, **No** conserva sus ajustes y compila su APK;
-**Sí** lo reemplaza. Desmarca **Compilar APK instalable** si solo quieres generar el proyecto.
+**Sí** lo reemplaza. Elige **Proyecto de Android Studio** si solo quieres generar el proyecto.
 
 Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`). En Windows, si no abre o sale un error de "Python Launcher", usa **`j2a-gui.bat`**: muestra el error en vez de cerrarse.
 

@@ -34,6 +34,10 @@ public final class Shaders {
 
     /** id, menu label, needs linear filtering, "s" scaler / "e" effect, fragment body. */
     static final String[][] BUILT_IN = {
+            {"vivid", "Color vivo (contraste y saturación)", "0", "e",
+                    "void main() { vec4 c = texture2D(sampler0, v_texcoord0); float l = dot(c.rgb, vec3(0.299,0.587,0.114)); gl_FragColor = vec4(clamp((mix(vec3(l), c.rgb, 1.2) - 0.5) * 1.06 + 0.5, 0.0, 1.0), c.a); }"},
+            {"warm", "Ámbar (pantalla cálida)", "0", "e",
+                    "void main() { vec4 c = texture2D(sampler0, v_texcoord0); gl_FragColor = vec4(c.rgb * vec3(1.0,0.94,0.82), c.a); }"},
             {"nearest", "Nítido (píxeles tal cual)", "0", "s",
                     "void main() { gl_FragColor = texture2D(sampler0, v_texcoord0); }"},
             // Integer prescale + bilinear only on pixel edges: sharp at any (non-integer) scale.
@@ -116,6 +120,11 @@ public final class Shaders {
                 d.linear = s[2].equals("1");
                 d.scaler = s[3].equals("s");
                 d.fragment = HEAD + s[4];
+                if (!d.scaler) {
+                    d.fragment = HEAD + "uniform float u_effectStrength;\n"
+                            + s[4].replace("void main()", "void effectMain()")
+                            + "\nvoid main() { effectMain(); gl_FragColor = mix(texture2D(sampler0, v_texcoord0), gl_FragColor, u_effectStrength); }\n";
+                }
                 return d;
             }
         }

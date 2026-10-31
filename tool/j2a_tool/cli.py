@@ -5,7 +5,7 @@ import os
 import platform
 import sys
 
-from . import analyze, build, decompile, generate, paths
+from . import adb, analyze, build, decompile, generate, paths
 
 DESCRIPTION = """j2a — convierte juegos J2ME (Symbian / Series 40 / .jar) en proyectos nativos de Android Studio.
 
@@ -60,12 +60,16 @@ def cmd_patch(a):
 
 def cmd_port(a):
     out = generate.port(a)
-    if a.apk:
-        build.build_apk(out, a.apk_output)
+    if a.apk or a.install:
+        apks = build.build_apk(out, a.apk_output)
+        if a.install:
+            adb.install(apks, a.device)
 
 
 def cmd_build(a):
-    build.build_apk(a.project, a.output)
+    apks = build.build_apk(a.project, a.output)
+    if a.install:
+        adb.install(apks, a.device)
 
 
 def cmd_verify(a):
@@ -198,11 +202,15 @@ def main(argv=None):
     s.add_argument("--keep-work", action="store_true", help="conservar j2a-work/ (JAR parcheado y descompilado)")
     s.add_argument("--apk", action="store_true", help="compilar y entregar una APK instalable al terminar")
     s.add_argument("--apk-output", help="carpeta de APKs (por defecto <proyecto>/apk)")
+    s.add_argument("--install", action="store_true", help="compilar e instalar por ADB")
+    s.add_argument("--device", help="serial del dispositivo ADB")
     s.set_defaults(func=cmd_port)
 
     s = sub.add_parser("build", help="compila la APK de un proyecto ya generado")
     s.add_argument("project")
     s.add_argument("-o", "--output", help="carpeta de APKs (por defecto <proyecto>/apk)")
+    s.add_argument("--install", action="store_true", help="instalar después de compilar")
+    s.add_argument("--device", help="serial del dispositivo ADB")
     s.set_defaults(func=cmd_build)
 
     s = sub.add_parser("verify", help="compila un proyecto generado con javac (sin Gradle)")
@@ -214,6 +222,8 @@ def main(argv=None):
     s.set_defaults(func=cmd_doctor)
 
     a = p.parse_args(argv)
+    if getattr(a, 'install', False) and not a.device:
+        p.error("--install requiere --device SERIAL")
     if not getattr(a, "func", None):
         p.print_help()
         return 1

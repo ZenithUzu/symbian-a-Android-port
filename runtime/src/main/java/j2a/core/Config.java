@@ -18,6 +18,8 @@ public final class Config {
     public boolean filter = false;
     /** Post-processing shader id (see Shaders) or "file:<section>" from assets/shaders/*.ini. */
     public String shader = "nearest";
+    /** Strength of built-in effects; external RetroArch/PPSSPP shaders keep their own parameters. */
+    public int effectStrength = 100;
     /** Rotate the game image 0/90/270 degrees (games that draw sideways); -1 = detect (AutoFit). */
     public int rotate = -1;
     /** Shrink the shown area to what a fixed-resolution game really draws (see AutoFit). */
@@ -75,6 +77,7 @@ public final class Config {
         c.scaleMode = s(p, "scale.mode", c.scaleMode);
         c.filter = b(p, "scale.filter", c.filter);
         c.shader = s(p, "shader", c.filter ? "smooth" : "nearest");
+        c.effectStrength = Math.max(0, Math.min(100, i(p, "effect.strength", 100)));
         c.fpsMode = s(p, "fps.mode", c.fpsMode);
         c.autoFit = b(p, "auto.fit", c.autoFit);
         c.rotate = i(p, "rotate", c.rotate);

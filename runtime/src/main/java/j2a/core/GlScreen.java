@@ -47,7 +47,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
     private String loadedShader;
     /** One compiled filter of the chain (see Shaders): j2a/PPSSPP and RetroArch names both looked up. */
     private static final class Pass {
-        int program, aPos, aTex, uTexel, uPixel, uMvp, uTexSize, uInSize, uOutSize, uFrame, uDir;
+        int program, aPos, aTex, uTexel, uPixel, uMvp, uTexSize, uInSize, uOutSize, uFrame, uDir, uStrength;
         boolean linear;
     }
     private final java.util.ArrayList<Pass> passes = new java.util.ArrayList<Pass>();
@@ -294,6 +294,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glUseProgram(p.program);
+            if (p.uStrength >= 0) GLES20.glUniform1f(p.uStrength, Host.cfg.effectStrength / 100f);
             // first pass reads the game texture; later ones the previous pass, on the game's pixel grid
             float tw = i == first ? texW : gw, th = i == first ? texH : gh;
             if (p.uTexel >= 0) GLES20.glUniform2f(p.uTexel, 1f / tw, 1f / th);
@@ -387,6 +388,7 @@ public class GlScreen extends GLSurfaceView implements GLSurfaceView.Renderer {
             p.uOutSize = GLES20.glGetUniformLocation(prog, "OutputSize");
             p.uFrame = GLES20.glGetUniformLocation(prog, "FrameCount");
             p.uDir = GLES20.glGetUniformLocation(prog, "FrameDirection");
+            p.uStrength = GLES20.glGetUniformLocation(prog, "u_effectStrength");
             passes.add(p); // samplers (sampler0, Texture, decal...) default to texture unit 0
         }
         if (passes.isEmpty() && !"nearest".equals(spec)) loadShader("nearest");
