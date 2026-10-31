@@ -1,0 +1,27 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'j2a.offline'
+    compileSdk 35
+    defaultConfig { applicationId 'com.zenithuzu.j2a.offline'; minSdk 26; targetSdk 35; versionCode 1; versionName '0.1.0' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/engineAssets'))
+    sourceSets.main.java.srcDir(layout.buildDirectory.dir('generated/catalog'))
+    packaging { resources { excludes += ['LICENSE', 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'META-INF/versions/**'] } }
+}
+dependencies {
+    implementation 'com.android.tools:r8:8.3.37'
+    implementation 'com.android.tools.build:apksig:8.7.3'
+}
+tasks.register('stageEngine', Copy) {
+    dependsOn ':template:assembleDebug'
+    from(project(':template').layout.buildDirectory.dir('outputs/apk/debug')) { include '*-debug.apk'; rename { 'engine-template.apk' } }
+    from('../../runtime-extra/NOTICE-EXTRA.md')
+    from('../../runtime-m3g/NOTICE-M3G.md')
+    into layout.buildDirectory.dir('generated/engineAssets')
+}
+tasks.named('preBuild').configure { dependsOn 'stageEngine' }
+tasks.register('stageCatalog', Copy) {
+    from('../../runtime/src/main/java/j2a/core/ResolutionProfiles.java')
+    into layout.buildDirectory.dir('generated/catalog/j2a/core')
+}
+tasks.named('preBuild').configure { dependsOn 'stageCatalog' }

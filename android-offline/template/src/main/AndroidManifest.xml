@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <application android:label="J2A_GAME_TITLE" android:icon="@drawable/ic_launcher"
+        android:extractNativeLibs="true" android:usesCleartextTraffic="true" android:allowBackup="true"
+        android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" android:appCategory="game">
+        <activity android:name="j2a.offline.template.GameActivity" android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:screenOrientation="fullSensor">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+    </application>
+</manifest>

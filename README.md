@@ -13,6 +13,10 @@ MiJuego.jar ──► j2a analyze ──► j2a port ──► proyecto Android 
 
 ## Requisitos
 
+**Versión Android sin PC:** consulta [android-offline/README.md](android-offline/README.md).
+Su única salida es una APK firmada; incluye compilador y motor para convertir localmente.
+Las instrucciones siguientes corresponden a la herramienta de escritorio.
+
 - **Python 3.8+** (sin dependencias; Pillow es opcional para agrandar el icono).
 - **Android Studio** (ya lo tienes). j2a usa su JDK (`jbr`) y su Android SDK automáticamente.
   Si no los encuentra, define `JAVA_HOME` y `ANDROID_HOME`.
