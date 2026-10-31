@@ -36,10 +36,14 @@ def screenshot(name):
 
 
 adb('logcat', '-c')
+print('INITIAL_UI', [(n.get('text'), n.get('content-desc')) for n in nodes()])
+screenshot('initial')
 if any(n.get('text', '').casefold() == 'sí, mostrar teclado' for n in nodes()):
     tap('Sí, mostrar teclado')
 adb('shell', 'input', 'keyevent', '4')
 time.sleep(1)
+print('MENU_UI', [(n.get('text'), n.get('content-desc')) for n in nodes()])
+screenshot('menu-open')
 required = ['Pantalla', 'Filtros', 'Controles', 'Sonido', 'Rendimiento', 'Más opciones']
 for name in required:
     find(name)
@@ -60,4 +64,5 @@ assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismi
 crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
 assert 'FATAL EXCEPTION' not in crashes, crashes
 print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')
+
 
