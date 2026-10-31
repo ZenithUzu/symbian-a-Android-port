@@ -28,6 +28,7 @@ def tap(label):
     import re
     values = list(map(int, re.findall(r'\d+', find(label).get('bounds'))))
     adb('shell', 'input', 'tap', str((values[0] + values[2]) // 2), str((values[1] + values[3]) // 2))
+    time.sleep(.7)
 
 
 def screenshot(name):
@@ -56,12 +57,15 @@ assert not any('PLAYER CONSOLE' in n.get('text', '') or 'Centro de juego' in n.g
 screenshot('ajustes-vertical')
 for label, filename in [('Pantalla', 'pantalla'), ('Filtros', 'filtros'), ('Sonido', 'sonido'), ('Controles', 'controles')]:
     tap(label)
+    assert any(n.get('text') == label for n in nodes()), 'Submenu did not open: ' + label
     screenshot(filename)
     adb('shell', 'input', 'keyevent', '4')
     find('Pantalla')
-adb('shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0')
-adb('shell', 'settings', 'put', 'system', 'user_rotation', '1')
+tap('Pantalla')
+tap('Rotación')
+tap('Siempre horizontal')
 time.sleep(2)
+adb('shell', 'input', 'keyevent', '82')
 find('Pantalla')
 screenshot('ajustes-horizontal')
 adb('shell', 'input', 'keyevent', '4')
@@ -69,6 +73,7 @@ assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismi
 crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
 assert 'FATAL EXCEPTION' not in crashes, crashes
 print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')
+
 
 
 
