@@ -40,6 +40,9 @@ print('INITIAL_UI', [(n.get('text'), n.get('content-desc')) for n in nodes()])
 screenshot('initial')
 if any(n.get('text', '').casefold() == 'sí, mostrar teclado' for n in nodes()):
     tap('Sí, mostrar teclado')
+# Android's first immersive-mode hint intercepts Back until acknowledged.
+if any(n.get('text', '').casefold() == 'got it' for n in nodes()):
+    tap('Got it')
 adb('shell', 'input', 'keyevent', '4')
 time.sleep(1)
 print('MENU_UI', [(n.get('text'), n.get('content-desc')) for n in nodes()])
@@ -64,6 +67,7 @@ assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismi
 crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
 assert 'FATAL EXCEPTION' not in crashes, crashes
 print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')
+
 
 
 
