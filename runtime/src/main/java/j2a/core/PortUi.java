@@ -43,10 +43,15 @@ final class PortUi {
         close.setOnClickListener(v -> { dialog.dismiss(); if (back != null) back.run(); }); root.addView(header);
         android.util.DisplayMetrics metrics = new android.util.DisplayMetrics(); a.getWindowManager().getDefaultDisplay().getMetrics(metrics);
         android.graphics.Rect visible = new android.graphics.Rect(); a.getWindow().getDecorView().getWindowVisibleDisplayFrame(visible);
-        int availableHeight = visible.height() > 0 ? visible.height() : metrics.heightPixels;
-        final int maxBodyHeight = Math.max(dp(a, 96), (int)(availableHeight * .84f) - dp(a, 64));
         ScrollView scroll = new ScrollView(a) {
-            @Override protected void onMeasure(int w, int h) { super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(maxBodyHeight, View.MeasureSpec.AT_MOST)); }
+            @Override protected void onMeasure(int w, int h) {
+                android.graphics.Rect current = new android.graphics.Rect();
+                a.getWindow().getDecorView().getWindowVisibleDisplayFrame(current);
+                int available = current.height() > 0 ? current.height() : a.getResources().getDisplayMetrics().heightPixels;
+                int limit = Math.max(dp(a, 48), (int)(available * .84f) - dp(a, 64));
+                if (View.MeasureSpec.getMode(h) != View.MeasureSpec.UNSPECIFIED) limit = Math.min(limit, View.MeasureSpec.getSize(h));
+                super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(limit, View.MeasureSpec.AT_MOST));
+            }
         };
         scroll.setClipToPadding(false); scroll.setPadding(dp(a, 8), 0, dp(a, 8), dp(a, 12));
         LinearLayout body = new LinearLayout(a); body.setOrientation(LinearLayout.VERTICAL); scroll.addView(body); root.addView(scroll);
@@ -69,3 +74,4 @@ final class PortUi {
         dialog.show(); if (window != null) window.setLayout(Math.min(dp(a, 440), (int)(metrics.widthPixels * .92f)), WindowManager.LayoutParams.WRAP_CONTENT);
     }
 }
+
