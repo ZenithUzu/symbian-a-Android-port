@@ -41,13 +41,15 @@ final class PortUi {
         TextView close = text(a, back == null ? "×" : "‹", 28, muted); close.setGravity(Gravity.CENTER); close.setContentDescription(back == null ? "Cerrar ajustes" : "Volver"); close.setFocusable(true);
         header.addView(close, new LinearLayout.LayoutParams(dp(a, 48), dp(a, 48)));
         close.setOnClickListener(v -> { dialog.dismiss(); if (back != null) back.run(); }); root.addView(header);
-        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics(); a.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics(); a.getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
         android.graphics.Rect visible = new android.graphics.Rect(); a.getWindow().getDecorView().getWindowVisibleDisplayFrame(visible);
         ScrollView scroll = new ScrollView(a) {
             @Override protected void onMeasure(int w, int h) {
                 android.graphics.Rect current = new android.graphics.Rect();
                 a.getWindow().getDecorView().getWindowVisibleDisplayFrame(current);
-                int available = current.height() > 0 ? current.height() : a.getResources().getDisplayMetrics().heightPixels;
+                android.util.DisplayMetrics display = new android.util.DisplayMetrics();
+                a.getWindowManager().getDefaultDisplay().getRealMetrics(display);
+                int available = current.height() > 0 ? Math.min(current.height(), display.heightPixels) : display.heightPixels;
                 int limit = Math.max(dp(a, 48), (int)(available * .84f) - dp(a, 64));
                 if (View.MeasureSpec.getMode(h) != View.MeasureSpec.UNSPECIFIED) limit = Math.min(limit, View.MeasureSpec.getSize(h));
                 super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(limit, View.MeasureSpec.AT_MOST));
@@ -74,4 +76,5 @@ final class PortUi {
         dialog.show(); if (window != null) window.setLayout(Math.min(dp(a, 440), (int)(metrics.widthPixels * .92f)), WindowManager.LayoutParams.WRAP_CONTENT);
     }
 }
+
 
