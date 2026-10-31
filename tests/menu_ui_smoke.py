@@ -19,7 +19,7 @@ def nodes():
 
 def find(label):
     for node in nodes():
-        if node.get('text', '').split(':')[0] == label:
+        if node.get('text', '').split(':')[0].casefold() == label.casefold():
             return node
     raise AssertionError('Missing menu option: ' + label)
 
@@ -36,6 +36,8 @@ def screenshot(name):
 
 
 adb('logcat', '-c')
+if any(n.get('text', '').casefold() == 'sí, mostrar teclado' for n in nodes()):
+    tap('Sí, mostrar teclado')
 adb('shell', 'input', 'keyevent', '4')
 time.sleep(1)
 required = ['Pantalla', 'Filtros', 'Controles', 'Sonido', 'Rendimiento', 'Más opciones']
@@ -58,3 +60,4 @@ assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismi
 crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
 assert 'FATAL EXCEPTION' not in crashes, crashes
 print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')
+

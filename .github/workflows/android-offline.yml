@@ -2,7 +2,7 @@ name: Android offline converter
 on:
   push:
     branches: [main]
-    paths: ['android-offline/**', 'runtime/**', 'runtime-extra/**', 'runtime-m3g/**', '.github/workflows/android-offline.yml']
+    paths: ['tests/menu_ui_smoke.py', 'android-offline/**', 'runtime/**', 'runtime-extra/**', 'runtime-m3g/**', '.github/workflows/android-offline.yml']
   workflow_dispatch:
 permissions:
   contents: read
