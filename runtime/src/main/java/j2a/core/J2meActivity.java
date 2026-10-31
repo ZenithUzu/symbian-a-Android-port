@@ -161,7 +161,7 @@ public class J2meActivity extends Activity {
         int code = e.getKeyCode();
         // Let text fields of native screens receive the keyboard.
         if (Host.screenContainer != null && Host.screenContainer.getVisibility() == View.VISIBLE
-                && code != KeyEvent.KEYCODE_BACK) {
+                && code != KeyEvent.KEYCODE_BACK && code != KeyEvent.KEYCODE_MENU && code != KeyEvent.KEYCODE_ESCAPE) {
             return super.dispatchKeyEvent(e);
         }
         if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE || code == KeyEvent.KEYCODE_MENU) {
@@ -233,3 +233,5 @@ public class J2meActivity extends Activity {
         pad(p + "r", x > 0.5f);
     }
 }
+
+
