@@ -1,0 +1,31 @@
+name: Publish Android APK
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download validated Android installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh run download 41188718089 --name j2a-offline-android --dir package
+          APK=$(find package -type f -name converter-debug.apk -print -quit)
+          test -n "$APK"
+          cp "$APK" j2a-offline-android.apk
+      - name: Publish APK-only release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view android-v0.1.0 >/dev/null 2>&1; then
+            gh release create android-v0.1.0 --target 19d1463d647e1d9b73858a44bc7b13866180b4e0 --title "j2a Offline para Android v0.1.0" --notes "Convierte JAR/JAD a APK directamente en Android, sin PC ni Internet. Android 8 o superior. Conversión, firma e instalación del juego de ejemplo comprobadas en Android 15. Conserva los datos de la herramienta para mantener la clave de firma local."
+          fi
+          gh release upload android-v0.1.0 j2a-offline-android.apk --clobber
