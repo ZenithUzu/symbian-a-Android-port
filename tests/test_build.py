@@ -25,7 +25,7 @@ class BuildTests(unittest.TestCase):
         self.metadata('game-debug.apk')
         (self.apk_dir / 'game-debug.apk').write_bytes(b'APK fixture')
         for name, result in [('java_bin', 'java'), ('find_java_home', str(self.project)),
-                             ('find_android_sdk', str(self.project))]:
+                             ('find_android_sdk', str(self.project)), ('apk_dir', str(self.project / 'delivery' / 'apk'))]:
             mock = patch.object(build.paths, name, return_value=result)
             mock.start()
             self.addCleanup(mock.stop)
@@ -42,15 +42,22 @@ class BuildTests(unittest.TestCase):
         with patch.object(build.subprocess, 'Popen', return_value=self.process()) as popen:
             result = build.build_apk(self.project, log=lambda _: None)
         self.assertEqual(Path(result[0]).read_bytes(), b'APK fixture')
+        self.assertEqual(Path(result[0]).parent, self.project / 'delivery' / 'apk')
         self.assertIn('build output', (self.project / 'apk-build.log').read_text())
         self.assertIn(':app:assembleDebug', popen.call_args.args[0])
         self.assertEqual(popen.call_args.kwargs['cwd'], str(self.project))
+
+    def test_explicit_apk_destination_is_honored(self):
+        destination = self.project / 'chosen folder' / 'apk'
+        with patch.object(build.subprocess, 'Popen', return_value=self.process()):
+            result = build.build_apk(self.project, destination, log=lambda _: None)
+        self.assertEqual(Path(result[0]).parent, destination)
 
     def test_failed_gradle_never_copies_old_apk(self):
         with patch.object(build.subprocess, 'Popen', return_value=self.process(1)):
             with self.assertRaisesRegex(RuntimeError, 'Gradle falló'):
                 build.build_apk(self.project, log=lambda _: None)
-        self.assertFalse((self.project / 'apk').exists())
+        self.assertFalse((self.project / 'delivery' / 'apk').exists())
 
     def test_rejects_metadata_path_traversal(self):
         self.metadata('../outside.apk')

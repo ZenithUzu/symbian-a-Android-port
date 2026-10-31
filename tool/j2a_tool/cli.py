@@ -166,7 +166,7 @@ def main(argv=None):
     s = sub.add_parser("port", help="genera el proyecto Android Studio")
     s.add_argument("jar")
     s.add_argument("--jad", help="archivo .jad (se busca automáticamente junto al .jar)")
-    s.add_argument("-o", "--output", help="carpeta del proyecto (por defecto <nombre>-android)")
+    s.add_argument("-o", "--output", help="carpeta del proyecto (por defecto proyectos/<nombre>-android)")
     s.add_argument("--mode", choices=["source", "jar", "hybrid"], default="source",
                    help="source: código editable (lo que no compile queda en bytecode); "
                         "jar: bytecode original (máxima fidelidad); hybrid: solo --edit como código")
@@ -201,14 +201,14 @@ def main(argv=None):
     s.add_argument("--force", action="store_true", help="sobrescribir la carpeta de salida")
     s.add_argument("--keep-work", action="store_true", help="conservar j2a-work/ (JAR parcheado y descompilado)")
     s.add_argument("--apk", action="store_true", help="compilar y entregar una APK instalable al terminar")
-    s.add_argument("--apk-output", help="carpeta de APKs (por defecto <proyecto>/apk)")
+    s.add_argument("--apk-output", help="carpeta de APKs (por defecto apk/ en la herramienta)")
     s.add_argument("--install", action="store_true", help="compilar e instalar por ADB")
     s.add_argument("--device", help="serial del dispositivo ADB")
     s.set_defaults(func=cmd_port)
 
     s = sub.add_parser("build", help="compila la APK de un proyecto ya generado")
     s.add_argument("project")
-    s.add_argument("-o", "--output", help="carpeta de APKs (por defecto <proyecto>/apk)")
+    s.add_argument("-o", "--output", help="carpeta de APKs (por defecto apk/ en la herramienta)")
     s.add_argument("--install", action="store_true", help="instalar después de compilar")
     s.add_argument("--device", help="serial del dispositivo ADB")
     s.set_defaults(func=cmd_build)

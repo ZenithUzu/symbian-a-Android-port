@@ -8,6 +8,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 
+def projects_dir():
+    return os.path.join(REPO, 'proyectos')
+
+
+def apk_dir():
+    return os.path.join(REPO, 'apk')
+
+
 def runtime_dir():
     return os.path.join(REPO, "runtime")
 

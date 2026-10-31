@@ -12,6 +12,8 @@ public final class Config {
     public int screenHeight = 320;
     /** Resolution from port.properties (the game's own), before any player change. */
     public int baseWidth = 240, baseHeight = 320;
+    public String screenProfiles = "";
+    public boolean expandedViewport = false;
     /** fit | integer | stretch */
     public String scaleMode = "fit";
     /** Kept for old port.properties: scale.filter=true means shader=smooth. */
@@ -74,6 +76,7 @@ public final class Config {
         c.screenHeight = i(p, "screen.height", c.screenHeight);
         c.baseWidth = c.screenWidth;
         c.baseHeight = c.screenHeight;
+        c.screenProfiles = s(p, "screen.profiles", "");
         c.scaleMode = s(p, "scale.mode", c.scaleMode);
         c.filter = b(p, "scale.filter", c.filter);
         c.shader = s(p, "shader", c.filter ? "smooth" : "nearest");

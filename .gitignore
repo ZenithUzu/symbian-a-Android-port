@@ -8,3 +8,5 @@ local.properties
 samples/demo-midlet/demo.jar
 samples/demo-midlet/demo.jad
 .DS_Store
+/proyectos/
+/apk/

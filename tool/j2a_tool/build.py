@@ -59,7 +59,7 @@ def build_apk(project, output=None, log=print):
         sources.append(source)
     if not sources:
         raise RuntimeError('La compilación no produjo ninguna APK.')
-    destination = Path(output).resolve() if output else project / 'apk'
+    destination = Path(output).resolve() if output else Path(paths.apk_dir()).resolve()
     destination.mkdir(parents=True, exist_ok=True)
     result = []
     for source in sources:

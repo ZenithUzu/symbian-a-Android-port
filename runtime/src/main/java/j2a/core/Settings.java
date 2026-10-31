@@ -28,6 +28,7 @@ final class Settings {
         c.sound = p.getBoolean("sound", c.sound);
         c.screenWidth = p.getInt("screen.width", c.screenWidth);
         c.screenHeight = p.getInt("screen.height", c.screenHeight);
+        c.expandedViewport = p.getBoolean("viewport.expanded", false);
         c.orientation = p.getString("orientation", c.orientation);
         c.autoFit = p.getBoolean("auto.fit", c.autoFit);
         c.rotate = p.getInt("rotate.choice", c.rotate);
@@ -57,6 +58,7 @@ final class Settings {
                 .putString("scale.mode", c.scaleMode)
                 .putString("shader", c.shader)
                 .putInt("effect.strength", c.effectStrength)
+                .putBoolean("viewport.expanded", c.expandedViewport)
                 .putString("fps.mode", c.fpsMode)
                 .putInt("keypad.alpha", c.keypadAlpha)
                 .putInt("pad.scale", c.padScale)
@@ -106,5 +108,24 @@ final class Settings {
     static void saveScreen(Context ctx, int w, int h) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putInt("screen.width", w).putInt("screen.height", h).apply();
+    }
+
+    static void rememberViewport(Context ctx, Config c) {
+        if (c.expandedViewport) return;
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString("viewport.before.orientation", c.orientation)
+                .putString("viewport.before.scale", c.scaleMode)
+                .putInt("viewport.before.rotate", c.rotate)
+                .putBoolean("viewport.before.fit", c.autoFit).apply();
+    }
+
+    static void restoreViewport(Context ctx, Config c) {
+        if (!c.expandedViewport) return;
+        SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        c.orientation = p.getString("viewport.before.orientation", "auto");
+        c.scaleMode = p.getString("viewport.before.scale", "fit");
+        c.rotate = p.getInt("viewport.before.rotate", -1);
+        c.autoFit = p.getBoolean("viewport.before.fit", true);
+        c.expandedViewport = false;
     }
 }

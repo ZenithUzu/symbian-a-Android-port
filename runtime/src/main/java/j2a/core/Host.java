@@ -502,6 +502,7 @@ public final class Host {
             item.accept("Tecla derecha del juego (atrás / pausa)", () -> tapKey(Keys.SOFT_RIGHT));
             item.accept("# IMAGEN Y PANTALLA", () -> {});
             item.accept("Resolución: " + cfg.screenWidth + "x" + cfg.screenHeight, Host::pickResolution);
+            item.accept("Widescreen: " + (cfg.expandedViewport ? "lienzo ampliado" : "original"), Host::pickWidescreen);
             item.accept("Rotación: " + (cfg.orientation.length() == 0 || "auto".equals(cfg.orientation) ? "la del teléfono"
                     : "portrait".equals(cfg.orientation) ? "vertical" : "horizontal"), () ->
                     pick("Rotación", new String[]{"La del teléfono (girar libremente)", "Siempre vertical", "Siempre horizontal"},
@@ -515,11 +516,11 @@ public final class Host {
                                     "270° (juegos que se juegan de lado, girando a la izquierda)"},
                             new String[]{"-1", "0", "90", "270"}, String.valueOf(cfg.rotate),
                             () -> applyOrientation(activity), "rotate"));
-            item.accept("Pantalla: " + ("wide".equals(cfg.scaleMode) ? "16:9" : "stretch".equals(cfg.scaleMode)
+            item.accept("Escalado: " + ("wide".equals(cfg.scaleMode) ? "estirado 16:9 (heredado)" : "stretch".equals(cfg.scaleMode)
                     ? "completa (estirar)" : "integer".equals(cfg.scaleMode) ? "pixel perfect" : "proporción original"), () ->
                     pick("Pantalla", new String[]{"Proporción original del juego", "Pixel perfect (escalado entero)",
-                                    "16:9 (usa casi toda la pantalla, deforma poco)", "Completa (estira hasta llenar todo)"},
-                            new String[]{"fit", "integer", "wide", "stretch"}, cfg.scaleMode, null, "scale"));
+                                    "Completa (estira, no añade escenario)"},
+                            new String[]{"fit", "integer", "stretch"}, cfg.scaleMode, null, "scale"));
             item.accept("Filtros: " + Shaders.label(activity, cfg.shader), Host::showFiltersMenu);
             item.accept("# RENDIMIENTO", () -> {});
             item.accept("Modo de FPS: " + cfg.fpsMode, () ->
@@ -541,7 +542,7 @@ public final class Host {
                 if (cfg.sound) javax.microedition.media.Manager.j2aResumeAll();
                 else javax.microedition.media.Manager.j2aPauseAll();
             }));
-            item.accept("Ajuste automático de resolución: " + (cfg.autoFit ? "sí" : "no"), () -> toggle(() -> {
+            if (!cfg.expandedViewport) item.accept("Ajuste automático de resolución: " + (cfg.autoFit ? "sí" : "no"), () -> toggle(() -> {
                 cfg.autoFit = !cfg.autoFit;
                 if (!cfg.autoFit) AutoFit.disable();
             }));
@@ -819,35 +820,78 @@ public final class Host {
                 }, Host::showPortMenu);
     }
 
-    /** Classic phone sizes plus a widescreen mode that matches this device's aspect ratio. */
+    /** Game-derived recommendations first; alternative device profiles remain explicit choices. */
     private static void pickResolution() {
         final java.util.List<int[]> sizes = new java.util.ArrayList<>();
         final java.util.List<String> labels = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        labels.add("# ESTE JUEGO"); sizes.add(null);
         sizes.add(new int[]{cfg.baseWidth, cfg.baseHeight});
-        labels.add("Original del juego (" + cfg.baseWidth + "x" + cfg.baseHeight + ")");
-        for (int[] r : AutoFit.RESOLUTIONS) {
-            sizes.add(r);
-            labels.add(r[0] + "x" + r[1]);
+        labels.add("Original: " + cfg.baseWidth + "x" + cfg.baseHeight);
+        seen.add(cfg.baseWidth + "x" + cfg.baseHeight);
+        for (String spec : cfg.screenProfiles.split(",")) {
+            try {
+                String[] pair = spec.split("x");
+                int w = Integer.parseInt(pair[0]), h = Integer.parseInt(pair[1]);
+                if (w >= 64 && h >= 64 && w <= 2048 && h <= 2048 && seen.add(spec)) {
+                    labels.add("Detectada en JAR/JAD: " + spec); sizes.add(new int[]{w,h});
+                }
+            } catch (RuntimeException ignored) {}
         }
-        android.util.DisplayMetrics dm = activity.getResources().getDisplayMetrics();
-        int shortSide = Math.min(cfg.baseWidth, cfg.baseHeight);
-        float aspect = Math.max(dm.widthPixels, dm.heightPixels) / (float) Math.min(dm.widthPixels, dm.heightPixels);
-        boolean portrait = cfg.baseWidth <= cfg.baseHeight;
-        int longSide = Math.round(shortSide * aspect);
-        // widescreen from the game's own size (not the current one, so it never grows twice)
-        sizes.add(portrait ? new int[]{shortSide, longSide} : new int[]{longSide, shortSide});
-        labels.add("Widescreen real " + sizes.get(sizes.size() - 1)[0] + "x" + sizes.get(sizes.size() - 1)[1]
-                + " (solo juegos que se adaptan; si no, usa Pantalla > 16:9)");
-        sizes.add(null);
-        labels.add("Personalizada…");
-        new AlertDialog.Builder(activity)
-                .setTitle("Resolución del juego")
-                .setItems(labels.toArray(new String[0]), (dlg, which) -> {
-                    int[] r = sizes.get(which);
-                    if (r == null) customResolution();
-                    else applyResolution(r[0], r[1]);
-                })
-                .show();
+        labels.add("# OTROS TELÉFONOS · COMPATIBILIDAD SEGÚN EL JUEGO"); sizes.add(null);
+        for (int[] r : ResolutionProfiles.CLASSIC) {
+            String spec = r[0] + "x" + r[1];
+            if (seen.add(spec)) { sizes.add(r); labels.add(spec); }
+        }
+        sizes.add(null); labels.add("Personalizada…");
+        list("Resolución virtual del juego", labels.toArray(new String[0]), which -> {
+            int[] r = sizes.get(which);
+            if (r == null) customResolution();
+            else applyResolution(r[0], r[1]);
+        }, Host::showPortMenu);
+    }
+
+    /** Expand the virtual canvas horizontally at the original vertical resolution, including sideways games. */
+    private static void pickWidescreen() {
+        final int turn = rotation();
+        android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+        activity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+        int windowW = screenContainer.getWidth(), windowH = screenContainer.getHeight();
+        if (windowW <= 0 || windowH <= 0) { windowW = dm.widthPixels; windowH = dm.heightPixels; }
+        final double deviceAspect = Math.max(1, Math.min(4, Math.max(windowW, windowH) / (double)Math.max(1, Math.min(windowW, windowH))));
+        final double[] ratios = {16.0/9, 18.0/9, 19.5/9, 20.0/9, 21.0/9, deviceAspect};
+        final String[] names = {"16:9", "18:9", "19.5:9", "20:9", "21:9", "Formato de esta ventana"};
+        final String[] labels = new String[ratios.length + 1];
+        labels[0] = "Restaurar lienzo original: " + cfg.baseWidth + "x" + cfg.baseHeight;
+        for (int i = 0; i < ratios.length; i++) {
+            try {
+                int[] r = ResolutionProfiles.panorama(cfg.baseWidth, cfg.baseHeight, turn, ratios[i]);
+                labels[i+1] = names[i] + ": lienzo " + r[0] + "x" + r[1];
+            } catch (IllegalArgumentException error) { labels[i+1] = names[i] + ": excede el tamaño permitido"; }
+        }
+        list("Widescreen · ampliar escenario", labels, which -> {
+            if (which == 0) { applyResolution(cfg.baseWidth, cfg.baseHeight); return; }
+            try {
+                final int[] r = ResolutionProfiles.panorama(cfg.baseWidth, cfg.baseHeight, turn, ratios[which-1]);
+                new AlertDialog.Builder(activity).setTitle("Ampliar el lienzo a " + r[0] + "x" + r[1])
+                        .setMessage("El juego recibirá más coordenadas horizontales, sin estirar ni recortar la imagen. "
+                                + "Los juegos adaptables pueden mostrar más escenario. Los de cámara, fondos o interfaz fijos "
+                                + "pueden dejar zonas vacías o dibujar mal y necesitan un parche específico. "
+                                + "Se desactiva el recorte automático para conservar el área ampliada. Puedes restaurar el original desde este menú.")
+                        .setPositiveButton("Aplicar", (d, k) -> {
+                            Settings.rememberViewport(activity, cfg);
+                            cfg.expandedViewport = true;
+                            cfg.scaleMode = "fit";
+                            cfg.autoFit = false;
+                            cfg.orientation = "landscape";
+                            cfg.rotate = turn;
+                            Settings.save(activity, cfg);
+                            saveResolutionAndRestart(r[0], r[1]);
+                        }).setNegativeButton("Cancelar", (d,k) -> pickWidescreen()).show();
+            } catch (IllegalArgumentException error) {
+                Toast.makeText(activity, error.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }, Host::showPortMenu);
     }
 
     private static void customResolution() {
@@ -876,6 +920,12 @@ public final class Host {
     }
 
     private static void applyResolution(int w, int h) {
+        Settings.restoreViewport(activity, cfg);
+        Settings.save(activity, cfg);
+        saveResolutionAndRestart(w, h);
+    }
+
+    private static void saveResolutionAndRestart(int w, int h) {
         Settings.saveScreen(activity, w, h);
         new AlertDialog.Builder(activity)
                 .setMessage("Resolución " + w + "x" + h + ". Hay que reiniciar el juego para aplicarla.")

@@ -13,10 +13,7 @@ import android.graphics.Rect;
  */
 public final class AutoFit {
     /** Classic phone resolutions (portrait and landscape where both existed). */
-    public static final int[][] RESOLUTIONS = {
-            {96, 65}, {101, 80}, {128, 128}, {128, 160}, {132, 176}, {176, 204}, {176, 208}, {176, 220},
-            {208, 208}, {240, 260}, {240, 320}, {320, 240}, {240, 400}, {400, 240}, {240, 432}, {352, 416},
-            {320, 480}, {480, 320}, {360, 640}, {640, 360}, {480, 640}, {640, 480}, {480, 800}, {800, 480}};
+    public static final int[][] RESOLUTIONS = ResolutionProfiles.CLASSIC;
 
     private static final int[][] KNOWN = RESOLUTIONS;
     private static final int TOLERANCE = 4;
@@ -48,6 +45,13 @@ public final class AutoFit {
     static void start() {
         screenW = Host.cfg.screenWidth;
         screenH = Host.cfg.screenHeight;
+        if (Host.cfg.expandedViewport) {
+            detectedRotation = Math.max(0, Host.cfg.rotate);
+            rotationDecided = true;
+            tracking = false;
+            fit = null;
+            return;
+        }
         String rot = Settings.rotationFor(Host.activity, screenW, screenH);
         if (rot.length() > 0) {
             detectedRotation = Integer.parseInt(rot);

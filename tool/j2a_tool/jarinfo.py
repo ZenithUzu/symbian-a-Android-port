@@ -5,11 +5,15 @@ import struct
 import zipfile
 from collections import Counter
 
-# Same list as the APK's resolution menu (j2a.core.Host.RESOLUTIONS)
+# Same list as the APK's resolution menu (j2a.core.ResolutionProfiles.CLASSIC).
 COMMON_SCREENS = [
-    (96, 65), (101, 80), (128, 128), (128, 160), (132, 176), (176, 204), (176, 208), (176, 220),
-    (208, 208), (240, 260), (240, 320), (320, 240), (240, 400), (400, 240), (240, 432), (352, 416),
-    (320, 480), (480, 320), (360, 640), (640, 360), (480, 640), (640, 480), (480, 800), (800, 480),
+    (96,65), (101,80), (128,96), (96,128), (120,160), (160,120),
+    (128,128), (128,160), (160,128), (132,176), (176,132), (160,160),
+    (176,204), (176,208), (208,176), (176,220), (220,176), (208,208),
+    (240,260), (240,320), (320,240), (240,400), (400,240), (240,432), (432,240),
+    (352,416), (416,352), (320,480), (480,320), (360,640), (640,360),
+    (480,640), (640,480), (480,800), (800,480), (480,854), (854,480),
+    (640,200), (640,320), (800,352),
 ]
 
 # Phone models / platform names often found in JAR/JAD names ("Juego_N95.jar", "s60v3").
@@ -161,10 +165,9 @@ class MidletSuite:
         names = [os.path.basename(self.jar_path)] + ([os.path.basename(self.jad_path)] if self.jad_path else [])
         names += [self.attrs.get(k, "") for k in ("MIDlet-Jar-URL", "MIDlet-Name", "MIDlet-Description")]
         text = " ".join(names).lower()
-        m = re.search(r"(?<!\d)(\d{3})\s*[x*_-]\s*(\d{3})(?!\d)", text)
-        if m:
+        for m in re.finditer(r"(?<!\d)(\d{2,4})\s*[x*_-]\s*(\d{2,4})(?!\d)", text):
             w, h = int(m.group(1)), int(m.group(2))
-            if 96 <= w <= 1024 and 96 <= h <= 1024:
+            if 64 <= w <= 2048 and 64 <= h <= 2048:
                 hints.append((w, h, "nombre del archivo"))
         squashed = re.sub(r"[\s_.]+", "", text)
         for w, h, models in DEVICE_SCREENS:

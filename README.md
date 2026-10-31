@@ -37,7 +37,7 @@ no desinstala el juego ni borra partidas automáticamente.
 
 ```powershell
 python tool/j2a.py port MiJuego.jar --install --device SERIAL
-python tool/j2a.py build MiJuego-android --install --device SERIAL
+python tool/j2a.py build proyectos/MiJuego-android --install --device SERIAL
 ```
 
 Dentro de cada juego, el **Centro de juego** reemplaza la lista Android básica por un panel
@@ -48,8 +48,8 @@ ajustable y persistente de 0 a 100%. Los shaders externos y los de RetroArch con
 propios parámetros (la intensidad integrada no modifica CRT Lottes ni Matriz de puntos).
 Esto cambia los menús del port; conserva la interfaz original dibujada por cada juego J2ME.
 
-La interfaz compila una **APK instalable** por defecto. Añade tus JAR, elige un perfil de imagen
-y pulsa **Generar APKs**. El resultado está en `<proyecto>/apk/`; **Abrir carpeta** abre esa carpeta
+La interfaz compila una **APK instalable** por defecto. Añade tus JAR, elige el tipo de entrega
+y pulsa **Generar APK**. Los proyectos van en `proyectos/` y las APKs en `apk/`, dentro de la carpeta de la herramienta; **Abrir carpeta** abre esa carpeta
 cuando ya existe. La primera compilación descarga Gradle y sus dependencias: necesita internet,
 el JDK de Android Studio y los paquetes/licencias del SDK que pida Gradle (SDK Manager).
 No hace falta abrir cada proyecto en Android Studio para compilar.
@@ -67,9 +67,9 @@ lo omite y conserva el filtro básico como respaldo.
 Por comandos:
 
 ```powershell
-python tool/j2a.py port MiJuego.jar -o MiJuego-android --apk
-python tool/j2a.py build MiJuego-android
-python tool/j2a.py build MiJuego-android -o MisAPKs
+python tool/j2a.py port MiJuego.jar --apk
+python tool/j2a.py build proyectos/MiJuego-android
+python tool/j2a.py build proyectos/MiJuego-android -o MisAPKs
 ```
 
 Si una compilación falla, el proyecto permanece disponible y `apk-build.log` contiene el registro.
@@ -82,15 +82,16 @@ Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`). En Wind
 1. **Arrastra** uno o varios `.jar` a la lista (o **Añadir juegos…**, o suéltalos sobre `j2a-gui.bat`).
    Cada juego muestra su nombre, su paquete y dónde se creará su proyecto, todo automático.
 2. Si quieres cambiar algo de un juego (nombre, paquete o carpeta), haz **doble clic** en él.
-3. **Guardar**: *junto a cada juego* (`Juego-android` al lado de su `.jar`) o *en esta carpeta*, que
-   queda como carpeta por defecto la próxima vez.
-4. **Crear ports**. Se crean uno tras otro; si uno falla, los demás siguen. Si un proyecto ya existe,
+3. **Guardar**: `proyectos/Juego-android/` y `apk/`. **Cambiar carpeta base** permite elegir otro destino
+   que conserve estas dos subcarpetas. Las rutas no dependen de dónde esté el JAR ni del directorio de la terminal.
+4. **Generar APK / Crear proyecto Android / Crear e instalar APK**, según Entrega. Se crean uno tras otro; si uno falla, los demás siguen. Si un proyecto ya existe,
    la ventana pregunta si reemplazarlo.
 5. **Abrir carpeta** y ábrela en Android Studio (File → Open) → Run ▶. Ese proyecto es el código ya
    descompilado: lo puedes corregir o mejorar ahí mismo.
 
-**Opciones** (plegadas, todo automático por defecto): resolución, rotación, pantalla, shader, FPS y teclado,
-que se aplican a todos los juegos de la lista.
+**Exportación y dispositivos** contiene solo el modo de código, archivos de filtros externos que se
+incluyen al compilar, destino y ADB. Resolución, filtros, pantalla, FPS y controles se ajustan dentro
+del juego. Los parámetros avanzados siguen disponibles en la CLI para automatización.
 
 Arrastrar dentro de la ventana usa el paquete `tkinterdnd2`: `j2a-gui.bat` lo instala solo la primera vez
 (o `python -m pip install tkinterdnd2`). Sin él, todo lo demás funciona igual.
@@ -171,6 +172,24 @@ teclado numérico), teclado de teléfono, **asignar la tecla del juego** a cada 
 físico: L2/R2, L3/R3, stick derecho), controles visibles, **moverlos arrastrándolos**, tamaño, opacidad y
 vibración. Un mando físico se mapea solo con las mismas teclas.
 Todo se guarda entre sesiones.
+
+## Resoluciones y widescreen dentro del juego
+
+En **Centro de juego → Resolución**, primero aparecen la resolución original y las pistas encontradas
+en el manifiesto, JAD, nombre, imágenes y código del JAR. Son recomendaciones detectadas, no garantía
+de que el juego soporte todas ellas. Después están 40 perfiles clásicos y tamaños alternativos,
+incluyendo pantallas pequeñas, formatos apaisados y Communicator, y la resolución personalizada.
+
+**Widescreen → 16:9 / 18:9 / 19.5:9 / 20:9 / 21:9 / formato de esta ventana** amplía las coordenadas
+del lienzo que recibe el juego conservando la altura original. Por ejemplo, 320x240 pasa a 427x240
+en 16:9. En juegos que dibujan girados, se intercambian los ejes del buffer para ampliar el lado correcto.
+Usa escalado proporcional y desactiva AutoFit para que no recorte el escenario nuevo. Requiere reinicio;
+puedes restaurar el lienzo original y los ajustes anteriores desde el mismo menú.
+
+Esto permite más escenario en juegos adaptables que consultan getWidth/getHeight. No modifica por sí
+solo cámaras, fondos, buffers internos ni HUD codificados para una resolución fija: esos juegos
+necesitan parches específicos. El estirado antiguo 16:9 ya no se ofrece como widescreen en el menú;
+su valor se conserva para compatibilidad con configuraciones previas de la CLI.
 
 ## Cómo funciona
 

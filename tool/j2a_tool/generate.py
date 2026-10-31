@@ -311,7 +311,7 @@ def port(args):
     if not re.match(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$", package):
         raise SystemExit("Nombre de paquete inválido: %s" % package)
 
-    out = os.path.abspath(args.output or display_file_name(app_name) + "-android")
+    out = os.path.abspath(args.output or os.path.join(paths.projects_dir(), display_file_name(app_name) + "-android"))
     if os.path.exists(out) and os.listdir(out):
         if not args.force:
             raise SystemExit("La carpeta %s ya existe y no está vacía (usa --force para reemplazarla)" % out)
@@ -468,7 +468,10 @@ def port(args):
     hint_mode, hint_ask = report["keypad_hint"]
     args.keypad_ask = not args.keypad and hint_ask
     args.keypad = args.keypad or hint_mode or "gamepad"
-    write_props(os.path.join(assets, "port.properties"), _port_items(midlet_class, sw, sh, args),
+    profiles = list(dict.fromkeys('%dx%d' % (w, h) for w, h, _ in report['screen_hints']
+                                 if 64 <= w <= 2048 and 64 <= h <= 2048))
+    write_props(os.path.join(assets, "port.properties"), _port_items(midlet_class, sw, sh, args) +
+                [('screen.profiles', ','.join(profiles))],
                 "Configuración del port (editable). El jugador puede cambiar algunas opciones\n"
                 "desde el menú del port (gesto o botón Atrás).")
     n_shader_sets = copy_shaders(args.shaders, os.path.join(app, "src", "main", "assets", "shaders"))

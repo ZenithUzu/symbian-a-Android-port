@@ -29,37 +29,6 @@ except Exception:  # noqa: BLE001 - without it, multi-select in "Elegir…" and 
 
 # (texto visible, valor del comando); None = no pasar la opción (j2a decide/detecta)
 MODES = [("Código editable (recomendado)", "source"), ("Bytecode original (máxima fidelidad)", "jar")]
-SCREENS = [("Detectar automáticamente", None)] + [
-    ("%dx%d" % wh + (" (horizontal)" if wh[0] > wh[1] else ""), "%dx%d" % wh) for wh in (
-        (96, 65), (101, 80), (128, 128), (128, 160), (132, 176), (176, 204), (176, 208), (176, 220),
-        (208, 208), (240, 260), (240, 320), (320, 240), (240, 400), (400, 240), (240, 432), (352, 416),
-        (320, 480), (480, 320), (360, 640), (640, 360), (480, 640), (640, 480), (480, 800), (800, 480))]
-ORIENTATIONS = [("La del teléfono (gira libremente)", None), ("Siempre vertical", "portrait"),
-                ("Siempre horizontal", "landscape")]
-SHADERS = [("Nítido", "nearest"), ("Nítido sin deformar (sharp)", "sharp"), ("xBR (redondea el pixel art)", "xbr"),
-           ("MMPX (pixel art nítido)", "mmpx"), ("AANN (nítido sin dientes)", "aann"), ("Suavizado", "smooth"),
-           ("CRT", "nearest+crt"), ("CRT Lottes (televisión)", "nearest+crt-lottes"), ("xBR + CRT Lottes", "xbr+crt-lottes"),
-           ("Scanlines suaves", "nearest+scanlines"), ("Rejilla LCD", "nearest+lcd"), ("Matriz de puntos", "nearest+dot"),
-           ("LCD verde", "nearest+mono")]
-SCALERS = SHADERS[:6]
-EFFECTS = [("Sin efecto", ""), ("CRT · curvatura", "crt"), ("CRT Lottes · televisión", "crt-lottes"),
-           ("Scanlines", "scanlines"), ("LCD · teléfono clásico", "lcd"),
-           ("Matriz de puntos", "dot"), ("LCD verde", "mono")]
-EFFECTS += [("Color vivo", "vivid"), ("Ámbar cálido", "warm")]
-PRESETS = [("Original", "nearest", "", "integer"), ("Equilibrado", "sharp", "", "fit"),
-           ("Pixel art", "mmpx", "", "integer"), ("Televisión", "sharp", "crt-lottes", "fit"),
-           ("Teléfono clásico", "nearest", "lcd", "integer")]
-FPS_MODES = [("Sincronizado (vsync)", "vsync"), ("Dinámico (la pantalla se adapta)", "dynamic"),
-             ("Sin límite", "unlimited")]
-FPS_LIMITS = [("Sin límite", "0"), ("15", "15"), ("20", "20"), ("25", "25"), ("30", "30"), ("60", "60")]
-SCALES = [("Proporción original", "fit"), ("16:9 (usa casi toda la pantalla, deforma poco)", "wide"),
-          ("Pixel perfect", "integer"), ("Completa (estirar)", "stretch")]
-ROTATIONS = [("Automático (detecta juegos que dibujan de lado)", None), ("No", "0"), ("90° (el juego dibuja de lado, girar a la derecha)", "90"),
-             ("270° (el juego dibuja de lado, girar a la izquierda)", "270")]
-KEYPADS = [("Mando (cruceta + botones; táctiles: preguntar)", None), ("Teclado del teléfono (números)", "full"),
-           ("Cruceta + OK", "minimal"), ("Sin controles (el juego trae controles táctiles)", "none")]
-
-
 # Colores: la lista de juegos imita la pantalla LCD de un teléfono Nokia; el resto queda sobrio.
 PAPER, INK, MUTED = "#F3F5FA", "#18233B", "#586780"
 LCD, LCD_INK = "#FFFFFF", "#263957"
@@ -86,13 +55,13 @@ def save_prefs(prefs):
 
 
 def project_dir(jar, out_root, name=None):
-    """<carpeta>/<Nombre oficial>-android; sin carpeta elegida, junto al .jar."""
+    """Projects go to proyectos/<Nombre oficial>-android by default."""
     if not name:
         try:  # official game name from the manifest, not the downloaded file name
             name = MidletSuite(jar).name
         except Exception:  # noqa: BLE001 - unreadable jar: the port itself will explain
             name = os.path.splitext(os.path.basename(jar))[0]
-    return os.path.join(out_root or os.path.dirname(os.path.abspath(jar)),
+    return os.path.join(out_root or paths.projects_dir(),
                         generate.display_file_name(name) + "-android")
 
 
@@ -118,11 +87,9 @@ def game_info(jar):
 
 def build_args(v):
     """Lista de argumentos para 'j2a port' a partir de los valores de la ventana."""
-    a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"], "--shader", v["shader"],
-         "--fps-mode", v["fps_mode"], "--fps", v["fps"], "--scale", v.get("scale") or "fit"]
-    for key, flag in (("rotate", "--rotate"), ("keypad", "--keypad"), ("screen", "--screen"),
-                      ("orientation", "--orientation"), ("name", "--name"), ("package", "--package"),
-                      ("shaders", "--shaders")):
+    a = ["port", v["jar"], "-o", v["out"], "--mode", v["mode"]]
+    for key, flag in (("name", "--name"), ("package", "--package"), ("shaders", "--shaders"),
+                      ("apk_output", "--apk-output")):
         if v.get(key):
             a += [flag, v[key]]
     if v.get("force"):
@@ -177,8 +144,8 @@ class App(BaseTk):
     def __init__(self, initial=()):
         super().__init__()
         self.title("j2a Studio — de Java ME a APK")
-        self.minsize(940, 700)
-        self.geometry("1060x820")
+        self.minsize(900, 600)
+        self.geometry("1020x720")
         self.configure(bg=PAPER)
         self.q = queue.Queue()
         self.busy = False
@@ -192,7 +159,7 @@ class App(BaseTk):
         f.columnconfigure(0, weight=1)
 
         ttk.Label(f, text="j2a Studio  /  Tu biblioteca, en Android", style="H.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(f, text="01 Añade juegos    →    02 Ajusta la imagen    →    03 Recibe tus APK instalables",
+        ttk.Label(f, text="01 Añade juegos    →    02 Elige la entrega    →    03 Crea el proyecto o la APK",
                   style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 6))
         self.list_frame = tk.Frame(f, bg=LCD, highlightthickness=2, highlightbackground=LCD_INK)
         self.list_frame.grid(row=2, column=0, sticky="nsew")
@@ -218,19 +185,15 @@ class App(BaseTk):
         ttk.Button(row, text="Quitar", command=self.remove_games).pack(side="left", padx=(6, 0))
         ttk.Button(row, text="Abrir carpeta", command=self.open_out).pack(side="right")
 
-        # where to save: next to each game, or a remembered default folder
+        # Shared output base with separate proyectos/ and apk/ folders
         save = ttk.Frame(f)
         save.grid(row=4, column=0, sticky="ew")
         save.columnconfigure(2, weight=1)
         ttk.Label(save, text="Guardar", style="H2.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 12))
-        self.vars["where"] = tk.StringVar(value="folder" if self.prefs.get("out_root") else "beside")
-        self.vars["out"] = tk.StringVar(value=self.prefs.get("out_root", ""))
-        ttk.Radiobutton(save, text="Junto a cada juego", value="beside", variable=self.vars["where"],
-                        command=self.refresh).grid(row=0, column=1, sticky="w")
-        ttk.Radiobutton(save, text="En esta carpeta:", value="folder", variable=self.vars["where"],
-                        command=self.choose_root_if_empty).grid(row=1, column=1, sticky="w")
-        ttk.Label(save, textvariable=self.vars["out"], style="Muted.TLabel").grid(row=1, column=2, sticky="w")
-        ttk.Button(save, text="Cambiar…", command=self.pick_out).grid(row=1, column=3, sticky="e")
+        self.vars["out"] = tk.StringVar(value=self.prefs.get("workspace_root", paths.REPO))
+        ttk.Label(save, textvariable=self.vars["out"], style="Muted.TLabel").grid(row=0, column=1, columnspan=2, sticky="w")
+        ttk.Button(save, text="Cambiar carpeta base…", command=self.pick_out).grid(row=0, column=3, sticky="e")
+        ttk.Label(save, text="Proyectos → proyectos/     APKs → apk/", style="Muted.TLabel").grid(row=1, column=1, columnspan=3, sticky="w")
 
         # options: all automatic unless opened
         self.opts_open = tk.BooleanVar(value=True)
@@ -239,19 +202,8 @@ class App(BaseTk):
         self.opts = ttk.Frame(f, padding=(14, 6, 0, 0))
         self.opts.columnconfigure(1, weight=1)
         self.opts.columnconfigure(3, weight=1)
-        cells = [("Modo", "mode", MODES), ("Resolución", "screen", SCREENS), ("Rotación", "orientation", ORIENTATIONS),
-                 ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Escalado visual", "shader", SCALERS),
-                 ("Modo de FPS", "fps_mode", FPS_MODES), ("Límite de FPS", "fps", FPS_LIMITS),
-                 ("Controles", "keypad", KEYPADS), ("Efecto", "effect", EFFECTS)]
-        for i, (label, key, options) in enumerate(cells):
-            self.combo(self.opts, i // 2, (i % 2) * 2, label, key, options)
-        r = len(cells) // 2 + 1
-        presets = ttk.Frame(self.opts)
-        presets.grid(row=r, column=0, columnspan=4, sticky="ew", pady=(8, 8))
-        for title, scaler, effect, scale in PRESETS:
-            ttk.Button(presets, text=title, command=lambda s=scaler, e=effect, z=scale:
-                       self.apply_preset(s, e, z)).pack(side="left", padx=(0, 5))
-        r += 1
+        self.combo(self.opts, 0, 0, "Código generado", "mode", MODES)
+        r = 1
         self.vars["shaders"] = tk.StringVar()
         ttk.Label(self.opts, text="Filtros extra").grid(row=r, column=0, sticky="w", pady=3)
         ttk.Button(self.opts, text="Elegir carpeta…", command=self.pick_shaders).grid(row=r, column=1, sticky="w")
@@ -267,7 +219,7 @@ class App(BaseTk):
         ttk.Button(self.opts, text="Buscar ADB", command=self.scan_adb).grid(row=r + 2, column=3, padx=6)
         self.adb_status = tk.StringVar(value="ADB: conecta Android y autoriza la depuración USB.")
         ttk.Label(self.opts, textvariable=self.adb_status, style="Muted.TLabel").grid(row=r + 3, column=0, columnspan=4, sticky="w")
-        ttk.Label(self.opts, text="Los efectos se aplican sobre el escalado. xBR y CRT pueden consumir más GPU.\n"
+        ttk.Label(self.opts, text="Resolución, widescreen, filtros, FPS y controles se ajustan dentro del juego.\n"
                   "La APK usa firma de depuración. La primera compilación necesita internet y el SDK de Android.",
                   style="Muted.TLabel").grid(row=r + 4, column=0, columnspan=4, sticky="w", pady=8)
         self.opts.grid(row=6, column=0, sticky="ew")
@@ -376,7 +328,10 @@ class App(BaseTk):
 
     # ---------------------------------------------------------------- list
     def out_root(self):
-        return self.vars["out"].get() if self.vars["where"].get() == "folder" else ""
+        return os.path.join(self.vars["out"].get(), "proyectos")
+
+    def apk_root(self):
+        return os.path.join(self.vars["out"].get(), "apk")
 
     def refresh(self):
         """Redraws the game list from self.games."""
@@ -476,21 +431,9 @@ class App(BaseTk):
         self.update_options_label()
 
     def update_options_label(self):
-        changed = ["%s: %s" % (self.vars[k + "#label"], self.vars[k].get().split(" (")[0])
-                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "effect", "fps_mode", "fps", "keypad")
-                   if self.vars[k].get() != self.vars[k + "#default"]]
-        summary = "todo automático" if not changed else ", ".join(changed)
-        self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Opciones: " + summary)
+        self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Exportación y dispositivos")
         if hasattr(self, "go"):
             self.refresh()
-
-    def apply_preset(self, scaler, effect, scale):
-        if self.busy:
-            return
-        for key, value in (("shader", scaler), ("effect", effect), ("scale", scale)):
-            options = self.vars[key + "#opts"]
-            self.vars[key].set(next(label for label, v in options.items() if v == value))
-        self.update_options_label()
 
     def toggle_log(self, show=None):
         show = not self.log.winfo_ismapped() if show is None else show
@@ -501,21 +444,13 @@ class App(BaseTk):
         self.log_btn.configure(text="Ocultar detalles" if show else "Ver detalles")
 
     # --------------------------------------------------------------- pickers
-    def choose_root_if_empty(self):
-        if not self.vars["out"].get():
-            self.pick_out()
-        self.refresh()
-
     def pick_out(self):
-        p = filedialog.askdirectory(title="Carpeta donde se guardan los proyectos")
+        p = filedialog.askdirectory(title="Carpeta base para proyectos/ y apk/")
         if p:
             self.vars["out"].set(p)
-            self.vars["where"].set("folder")
-            self.prefs["out_root"] = p
+            self.prefs["workspace_root"] = p
             save_prefs(self.prefs)
-        elif not self.vars["out"].get():
-            self.vars["where"].set("beside")
-        self.refresh()
+            self.refresh()
 
     def pick_shaders(self):
         p = filedialog.askdirectory(title="Carpeta con filtros RetroArch (.glsl) o PPSSPP (.ini/.fsh)")
@@ -529,15 +464,8 @@ class App(BaseTk):
         if not self.games:
             self.add_games()
             return
-        if self.vars["where"].get() == "beside" and self.prefs.get("out_root"):
-            self.prefs.pop("out_root")  # remember "next to each game" as the default too
-            save_prefs(self.prefs)
         root = self.out_root()
-        v = {k: self.value(k) for k in ("mode", "screen", "orientation", "shader", "fps_mode", "fps",
-                                        "keypad", "shaders", "rotate", "scale")}
-        effect = self.value("effect")
-        if effect:
-            v["shader"] += "+" + effect
+        v = {"mode": self.value("mode"), "shaders": self.value("shaders"), "apk_output": self.apk_root()}
         v["apk"] = self.value("delivery") != "project"
         v["install"] = self.value("delivery") == "install"
         v["device"] = self.vars["device"].get()
@@ -563,7 +491,7 @@ class App(BaseTk):
             if g in existing and not replace:
                 g.status = "En cola" if v["apk"] else "Ya existe"
                 if v["apk"]:
-                    args = ["build", g.out(root)]
+                    args = ["build", g.out(root), "-o", self.apk_root()]
                     if v["install"]:
                         args += ["--install", "--device", v["device"]]
                     jobs.append((g.jar, args))
@@ -579,7 +507,7 @@ class App(BaseTk):
     def open_out(self):
         sel = self.tree.selection() or tuple(self.games)
         outs = [self.games[j].out(self.out_root()) for j in sel if j in self.games]
-        p = next((os.path.join(o, "apk") for o in outs if os.path.isdir(os.path.join(o, "apk"))), None)
+        p = self.apk_root() if self.value("delivery") != "project" and os.path.isdir(self.apk_root()) else None
         p = p or next((o for o in outs if os.path.isdir(o)), None) or self.out_root()
         if not p or not os.path.isdir(p):
             messagebox.showinfo("j2a", "Todavía no hay carpeta: crea el port primero.")
