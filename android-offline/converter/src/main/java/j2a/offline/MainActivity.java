@@ -64,7 +64,10 @@ public final class MainActivity extends Activity {
         SharedPreferences prefs=getPreferences(0);String jar=prefs.getString("jar",null),jad=prefs.getString("jad",null);
         if(jar==null)return;
         Intent intent=new Intent(this,BuildService.class).putExtra("jar",jar).putExtra("name",prefs.getString("name","Juego.jar"));if(jad!=null)intent.putExtra("jad",jad);
-        convert.setEnabled(false);startForegroundService(intent);
+        SharedPreferences state=getSharedPreferences(BuildService.STATE,0);
+        state.edit().putBoolean("busy",true).putString("result","").putString("log","").apply();refresh();
+        try { startForegroundService(intent); }
+        catch(RuntimeException error){state.edit().putBoolean("busy",false).putString("log","No se pudo iniciar la conversión: "+error).apply();refresh();}
     }
     private void saveApk(){String result=getSharedPreferences(BuildService.STATE,0).getString("result","");if(result.isEmpty())return;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/vnd.android.package-archive").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,new File(result).getName());startActivityForResult(intent,3);}
     @Override protected void onActivityResult(int request,int code,Intent intent) {

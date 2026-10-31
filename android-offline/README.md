@@ -41,7 +41,8 @@ internet; **las conversiones posteriores en el teléfono no**.
 
 El workflow `.github/workflows/android-offline.yml` compila la herramienta, ejecuta una conversión
 real en un emulador con Wi-Fi/datos apagados, verifica la firma, instala la APK resultante y abre
-el juego de ejemplo. El artefacto incluye la herramienta, el juego convertido y los registros.
+el juego de ejemplo. **j2a-offline-android** incluye solo el instalador de la herramienta;
+**j2a-offline-validation** contiene el juego de prueba convertido y los registros.
 Comprueba el resultado del workflow antes de considerar validada una compilación.
 
 D8/R8: BSD 3-Clause. apksig: Apache 2.0. Los módulos extra y 3D conservan sus avisos/licencias

@@ -32,6 +32,16 @@ jobs:
           chmod +x gradlew
           ./gradlew :converter:assembleDebug :converter:assembleAndroidTest --stacktrace
           ./gradlew --stop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j2a-offline-android
+          path: android-offline/converter/build/outputs/apk/debug/converter-debug.apk
+          if-no-files-found: error
+      - name: Enable emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Test real offline conversion on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -57,11 +67,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: j2a-offline-android
+          name: j2a-offline-validation
           path: |
-            android-offline/converter/build/outputs/apk/debug/converter-debug.apk
             demo-output.apk
             smoke-result.txt
             android-crashes.txt
-          if-no-files-found: error
-
+          if-no-files-found: warn
