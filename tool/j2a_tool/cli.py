@@ -5,14 +5,15 @@ import os
 import platform
 import sys
 
-from . import analyze, decompile, generate, paths
+from . import analyze, build, decompile, generate, paths
 
 DESCRIPTION = """j2a — convierte juegos J2ME (Symbian / Series 40 / .jar) en proyectos nativos de Android Studio.
 
 Comandos:
   analyze    Muestra qué hay en el JAR y qué APIs usa (y si están soportadas)
   decompile  Descompila el JAR a código Java legible (Vineflower o CFR)
-  port       Genera el proyecto Android Studio completo
+  port       Genera el proyecto Android Studio completo (--apk compila la APK)
+  build      Compila la APK instalable de un proyecto existente
   patch      Solo parchea el bytecode (getResourceAsStream) y escribe un JAR nuevo
   verify     Compila un proyecto generado con javac para detectar errores rápido
   doctor     Comprueba Java, Android SDK y descompiladores
@@ -58,7 +59,13 @@ def cmd_patch(a):
 
 
 def cmd_port(a):
-    generate.port(a)
+    out = generate.port(a)
+    if a.apk:
+        build.build_apk(out, a.apk_output)
+
+
+def cmd_build(a):
+    build.build_apk(a.project, a.output)
 
 
 def cmd_verify(a):
@@ -109,10 +116,11 @@ def cmd_doctor(a):
     print("javac:  %s" % (javac or "NO ENCONTRADO (necesario para verificar el código fuente)"))
     if home:
         print("        JAVA_HOME detectado: %s" % home)
-    ok &= bool(java)
+    ok &= bool(java and javac)
     sdk = paths.find_android_sdk()
     print("Android SDK: %s" % (sdk or "NO ENCONTRADO (define ANDROID_HOME)"))
     aj = paths.find_android_jar()
+    ok &= bool(sdk and aj)
     print("android.jar: %s" % (aj or "NO ENCONTRADO (instala una plataforma con el SDK Manager)"))
     for name, (_url, fname) in decompile.DECOMPILERS.items():
         p = os.path.join(paths.cache_dir(), "tools", fname)
@@ -121,7 +129,10 @@ def cmd_doctor(a):
     print("3D (M3G):     %s (los juegos 3D necesitan el NDK: Android Studio > SDK Manager > SDK Tools)"
           % paths.m3g_dir())
     print("")
-    print("Todo listo." if ok else "Falta Java: instala Android Studio o un JDK 17+.")
+    print("Entorno base listo; Gradle comprobará los paquetes necesarios para compilar la APK."
+          if ok else "Faltan componentes: revisa Java, javac y Android SDK indicados arriba.")
+    if not ok:
+        raise SystemExit(1)
 
 
 def main(argv=None):
@@ -185,7 +196,14 @@ def main(argv=None):
     s.add_argument("--platform", default="Nokia6300/07.21", help="valor de microedition.platform")
     s.add_argument("--force", action="store_true", help="sobrescribir la carpeta de salida")
     s.add_argument("--keep-work", action="store_true", help="conservar j2a-work/ (JAR parcheado y descompilado)")
+    s.add_argument("--apk", action="store_true", help="compilar y entregar una APK instalable al terminar")
+    s.add_argument("--apk-output", help="carpeta de APKs (por defecto <proyecto>/apk)")
     s.set_defaults(func=cmd_port)
+
+    s = sub.add_parser("build", help="compila la APK de un proyecto ya generado")
+    s.add_argument("project")
+    s.add_argument("-o", "--output", help="carpeta de APKs (por defecto <proyecto>/apk)")
+    s.set_defaults(func=cmd_build)
 
     s = sub.add_parser("verify", help="compila un proyecto generado con javac (sin Gradle)")
     s.add_argument("project")
@@ -199,5 +217,8 @@ def main(argv=None):
     if not getattr(a, "func", None):
         p.print_help()
         return 1
-    a.func(a)
+    try:
+        a.func(a)
+    except (RuntimeError, OSError, ValueError) as error:
+        p.exit(1, "Error: %s\n" % error)
     return 0

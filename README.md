@@ -26,6 +26,37 @@ python tool/j2a.py doctor      # comprueba Java, SDK y descompiladores
 
 ## Uso con interfaz (lo más fácil)
 
+### APK lista con j2a Studio
+
+La interfaz compila una **APK instalable** por defecto. Añade tus JAR, elige un perfil de imagen
+y pulsa **Generar APKs**. El resultado está en `<proyecto>/apk/`; **Abrir carpeta** abre esa carpeta
+cuando ya existe. La primera compilación descarga Gradle y sus dependencias: necesita internet,
+el JDK de Android Studio y los paquetes/licencias del SDK que pida Gradle (SDK Manager).
+No hace falta abrir cada proyecto en Android Studio para compilar.
+
+La APK usa la **clave de depuración local**, adecuada para instalar y probar en tu teléfono.
+Para publicar o distribuir actualizaciones con identidad propia, configura tu firma de producción.
+No desinstales un juego con partidas guardadas para actualizar: conserva la misma clave de firma.
+
+Los perfiles Original, Equilibrado, Pixel art, Televisión y Teléfono clásico ajustan escalado y efecto.
+También puedes elegirlos por separado. Los efectos LCD conservan ahora los detalles del filtro anterior.
+Dentro del juego, el menú de filtros incluye perfiles rápidos y una opción para restablecer la imagen.
+El rendimiento y la compatibilidad de shaders dependen de la GPU; si un shader no compila, el motor
+lo omite y conserva el filtro básico como respaldo.
+
+Por comandos:
+
+```powershell
+python tool/j2a.py port MiJuego.jar -o MiJuego-android --apk
+python tool/j2a.py build MiJuego-android
+python tool/j2a.py build MiJuego-android -o MisAPKs
+```
+
+Si una compilación falla, el proyecto permanece disponible y `apk-build.log` contiene el registro.
+Puedes corregir el SDK o el código y repetir `build` sin volver a generar ni perder tus cambios.
+En la interfaz, al encontrar un proyecto existente, **No** conserva sus ajustes y compila su APK;
+**Sí** lo reemplaza. Desmarca **Compilar APK instalable** si solo quieres generar el proyecto.
+
 Doble clic en **`j2a-gui.pyw`** (en Linux/macOS: `python3 j2a-gui.pyw`). En Windows, si no abre o sale un error de "Python Launcher", usa **`j2a-gui.bat`**: muestra el error en vez de cerrarse.
 
 1. **Arrastra** uno o varios `.jar` a la lista (o **Añadir juegos…**, o suéltalos sobre `j2a-gui.bat`).

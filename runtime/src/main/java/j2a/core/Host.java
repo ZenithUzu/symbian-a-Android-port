@@ -697,13 +697,32 @@ public final class Host {
         }
         if (slot[0].isEmpty()) slot[0] = "nearest";
         final Runnable back = Host::showFiltersMenu;
-        String[] items = new String[3];
+        String[] items = new String[5];
         for (int i = 0; i < 3; i++) {
             String name = "Ninguno";
             for (Shaders.Def d : i == 0 ? scalers : effects) if (d.id.equals(slot[i])) name = d.label;
             items[i] = (i == 0 ? "Filtro 1 (escalado): " : "Filtro " + (i + 1) + " (efecto): ") + name;
         }
-        list("Filtros", items, which -> {
+        items[3] = "Perfiles de imagen…";
+        items[4] = "Restablecer: píxeles originales";
+        list("Imagen · escalado y efectos", items, which -> {
+            if (which == 4) {
+                cfg.shader = "nearest";
+                gl.requestRender();
+                settingsChanged();
+                showFiltersMenu();
+                return;
+            }
+            if (which == 3) {
+                choose("Perfiles de imagen", new String[]{"Original · píxeles sin suavizado",
+                        "Equilibrado · nítido a cualquier tamaño", "Pixel art · MMPX",
+                        "Televisión · sharp + CRT Lottes", "Teléfono clásico · rejilla LCD"},
+                        -1, k -> {
+                            cfg.shader = new String[]{"nearest", "sharp", "mmpx", "sharp+crt-lottes", "nearest+lcd"}[k];
+                            gl.requestRender();
+                        }, back);
+                return;
+            }
             java.util.List<Shaders.Def> opts = which == 0 ? scalers : effects;
             int off = which == 0 ? 0 : 1; // effects start with "Ninguno"
             String[] ls = new String[opts.size() + off];
