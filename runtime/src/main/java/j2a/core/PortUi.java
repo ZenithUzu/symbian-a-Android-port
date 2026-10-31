@@ -34,7 +34,7 @@ final class PortUi {
         final int highlight = accent;
         Dialog dialog = new Dialog(a); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout root = new LinearLayout(a); root.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable background = new GradientDrawable(); background.setColor(surface); background.setCornerRadius(dp(a, 22)); root.setBackground(background);
+        GradientDrawable background = new GradientDrawable(); background.setColor(surface); background.setCornerRadius(dp(a, 22)); root.setBackground(background); root.setClipToOutline(true);
         LinearLayout header = new LinearLayout(a); header.setGravity(Gravity.CENTER_VERTICAL); header.setPadding(dp(a, 12), dp(a, 8), dp(a, 8), dp(a, 8));
         TextView heading = text(a, title, 20, ink); heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD); heading.setPadding(dp(a, 12), 0, 0, 0); heading.setGravity(Gravity.CENTER_VERTICAL);
         header.addView(heading, new LinearLayout.LayoutParams(0, dp(a, 48), 1));
@@ -76,5 +76,6 @@ final class PortUi {
         dialog.show(); if (window != null) window.setLayout(Math.min(dp(a, 440), (int)(metrics.widthPixels * .92f)), WindowManager.LayoutParams.WRAP_CONTENT);
     }
 }
+
 
 

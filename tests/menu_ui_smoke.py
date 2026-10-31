@@ -66,6 +66,7 @@ tap('Rotación')
 tap('Siempre horizontal')
 time.sleep(2)
 adb('shell', 'input', 'keyevent', '82')
+time.sleep(1)
 find('Pantalla')
 screenshot('ajustes-horizontal')
 adb('shell', 'input', 'keyevent', '4')
@@ -73,6 +74,7 @@ assert not any(n.get('text') == 'Ajustes' for n in nodes()), 'Back did not dismi
 crashes = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
 assert 'FATAL EXCEPTION' not in crashes, crashes
 print('MENU_UI_SUCCESS: root categories, submenus, back navigation and rotation')
+
 
 
 
