@@ -41,6 +41,13 @@ SHADERS = [("Nítido", "nearest"), ("Nítido sin deformar (sharp)", "sharp"), ("
            ("CRT", "nearest+crt"), ("CRT Lottes (televisión)", "nearest+crt-lottes"), ("xBR + CRT Lottes", "xbr+crt-lottes"),
            ("Scanlines suaves", "nearest+scanlines"), ("Rejilla LCD", "nearest+lcd"), ("Matriz de puntos", "nearest+dot"),
            ("LCD verde", "nearest+mono")]
+SCALERS = SHADERS[:6]
+EFFECTS = [("Sin efecto", ""), ("CRT · curvatura", "crt"), ("CRT Lottes · televisión", "crt-lottes"),
+           ("Scanlines", "scanlines"), ("LCD · teléfono clásico", "lcd"),
+           ("Matriz de puntos", "dot"), ("LCD verde", "mono")]
+PRESETS = [("Original", "nearest", "", "integer"), ("Equilibrado", "sharp", "", "fit"),
+           ("Pixel art", "mmpx", "", "integer"), ("Televisión", "sharp", "crt-lottes", "fit"),
+           ("Teléfono clásico", "nearest", "lcd", "integer")]
 FPS_MODES = [("Sincronizado (vsync)", "vsync"), ("Dinámico (la pantalla se adapta)", "dynamic"),
              ("Sin límite", "unlimited")]
 FPS_LIMITS = [("Sin límite", "0"), ("15", "15"), ("20", "20"), ("25", "25"), ("30", "30"), ("60", "60")]
@@ -53,9 +60,9 @@ KEYPADS = [("Mando (cruceta + botones; táctiles: preguntar)", None), ("Teclado 
 
 
 # Colores: la lista de juegos imita la pantalla LCD de un teléfono Nokia; el resto queda sobrio.
-PAPER, INK, MUTED = "#EEF0EC", "#1E2420", "#5F6B63"
-LCD, LCD_INK = "#B8C4A0", "#26301C"
-ACCENT, ACCENT_DOWN, BAD = "#2F4A5C", "#223745", "#8A2E22"
+PAPER, INK, MUTED = "#F3F5FA", "#18233B", "#586780"
+LCD, LCD_INK = "#FFFFFF", "#263957"
+ACCENT, ACCENT_DOWN, BAD = "#365BD6", "#2847AA", "#B42338"
 
 PREFS = os.path.join(paths.cache_dir(), "gui.json")
 
@@ -119,6 +126,8 @@ def build_args(v):
             a += [flag, v[key]]
     if v.get("force"):
         a.append("--force")
+    if v.get("apk", True):
+        a.append("--apk")
     return a
 
 
@@ -164,8 +173,9 @@ class Game:
 class App(BaseTk):
     def __init__(self, initial=()):
         super().__init__()
-        self.title("j2a — juegos Java a Android")
-        self.minsize(760, 560)
+        self.title("j2a Studio — de Java ME a APK")
+        self.minsize(940, 700)
+        self.geometry("1060x820")
         self.configure(bg=PAPER)
         self.q = queue.Queue()
         self.busy = False
@@ -178,8 +188,8 @@ class App(BaseTk):
         f.pack(fill="both", expand=True)
         f.columnconfigure(0, weight=1)
 
-        ttk.Label(f, text="Juegos", style="H.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(f, text="Arrastra aquí tus .jar. Doble clic en uno para cambiar su nombre, paquete o carpeta.",
+        ttk.Label(f, text="j2a Studio  /  Tu biblioteca, en Android", style="H.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(f, text="01 Añade juegos    →    02 Ajusta la imagen    →    03 Recibe tus APK instalables",
                   style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 6))
         self.list_frame = tk.Frame(f, bg=LCD, highlightthickness=2, highlightbackground=LCD_INK)
         self.list_frame.grid(row=2, column=0, sticky="nsew")
@@ -220,19 +230,25 @@ class App(BaseTk):
         ttk.Button(save, text="Cambiar…", command=self.pick_out).grid(row=1, column=3, sticky="e")
 
         # options: all automatic unless opened
-        self.opts_open = tk.BooleanVar(value=False)
+        self.opts_open = tk.BooleanVar(value=True)
         self.opts_btn = ttk.Button(f, style="Link.TButton", command=self.toggle_options)
         self.opts_btn.grid(row=5, column=0, sticky="w", pady=(12, 0))
         self.opts = ttk.Frame(f, padding=(14, 6, 0, 0))
         self.opts.columnconfigure(1, weight=1)
         self.opts.columnconfigure(3, weight=1)
         cells = [("Modo", "mode", MODES), ("Resolución", "screen", SCREENS), ("Rotación", "orientation", ORIENTATIONS),
-                 ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Filtro", "shader", SHADERS),
+                 ("Girar imagen", "rotate", ROTATIONS), ("Pantalla", "scale", SCALES), ("Escalado visual", "shader", SCALERS),
                  ("Modo de FPS", "fps_mode", FPS_MODES), ("Límite de FPS", "fps", FPS_LIMITS),
-                 ("Controles", "keypad", KEYPADS)]
+                 ("Controles", "keypad", KEYPADS), ("Efecto", "effect", EFFECTS)]
         for i, (label, key, options) in enumerate(cells):
             self.combo(self.opts, i // 2, (i % 2) * 2, label, key, options)
         r = len(cells) // 2 + 1
+        presets = ttk.Frame(self.opts)
+        presets.grid(row=r, column=0, columnspan=4, sticky="ew", pady=(8, 8))
+        for title, scaler, effect, scale in PRESETS:
+            ttk.Button(presets, text=title, command=lambda s=scaler, e=effect, z=scale:
+                       self.apply_preset(s, e, z)).pack(side="left", padx=(0, 5))
+        r += 1
         self.vars["shaders"] = tk.StringVar()
         ttk.Label(self.opts, text="Filtros extra").grid(row=r, column=0, sticky="w", pady=3)
         ttk.Button(self.opts, text="Elegir carpeta…", command=self.pick_shaders).grid(row=r, column=1, sticky="w")
@@ -240,6 +256,13 @@ class App(BaseTk):
             row=r, column=2, columnspan=2, sticky="w")
         ttk.Button(self.opts, text="Comprobar Java y Android SDK", command=lambda: self.run([["doctor"]])).grid(
             row=r + 1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.vars["apk"] = tk.BooleanVar(value=True)
+        ttk.Checkbutton(self.opts, text="Compilar APK instalable al terminar", variable=self.vars["apk"]).grid(
+            row=r + 1, column=2, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Label(self.opts, text="Los efectos se aplican sobre el escalado. xBR y CRT pueden consumir más GPU.\n"
+                  "La APK usa firma de depuración. La primera compilación necesita internet y el SDK de Android.",
+                  style="Muted.TLabel").grid(row=r + 2, column=0, columnspan=4, sticky="w", pady=8)
+        self.opts.grid(row=6, column=0, sticky="ew")
         self.update_options_label()
 
         bottom = ttk.Frame(f)
@@ -247,6 +270,8 @@ class App(BaseTk):
         bottom.columnconfigure(1, weight=1)
         self.go = ttk.Button(bottom, text="Crear ports", style="Primary.TButton", command=self.port)
         self.go.grid(row=0, column=0, sticky="w")
+        self.progress = ttk.Progressbar(bottom, mode="indeterminate", length=100)
+        self.progress.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         self.status = tk.StringVar()
         ttk.Label(bottom, textvariable=self.status, style="Muted.TLabel").grid(row=0, column=1, sticky="w", padx=12)
         self.log_btn = ttk.Button(bottom, text="Ver detalles", style="Link.TButton", command=self.toggle_log)
@@ -264,7 +289,14 @@ class App(BaseTk):
         self.refresh()
         if initial:
             self.add_paths(initial)
+        self.protocol("WM_DELETE_WINDOW", self.close_window)
         self.after(100, self.poll)
+
+    def close_window(self):
+        if self.busy:
+            messagebox.showinfo("Trabajo en curso", "Espera a que termine la tarea antes de cerrar la ventana.")
+        else:
+            self.destroy()
 
     # ----------------------------------------------------------------- look
     def style_window(self):
@@ -293,7 +325,7 @@ class App(BaseTk):
         st.configure("TRadiobutton", background=PAPER)
         st.configure("TCheckbutton", background=PAPER)
         st.configure("LCD.Treeview", background=LCD, fieldbackground=LCD, foreground=LCD_INK,
-                     font=self.fonts["lcd"], rowheight=26, borderwidth=0)
+                     font=self.fonts["body"], rowheight=36, borderwidth=0)
         st.configure("LCD.Treeview.Heading", background=LCD, foreground=LCD_INK, font=self.fonts["body"],
                      relief="flat", borderwidth=0)
         st.map("LCD.Treeview.Heading", background=[("active", LCD)])
@@ -342,9 +374,11 @@ class App(BaseTk):
         else:
             self.empty.place(relx=0.5, rely=0.5, anchor="center")
         n = len(self.games)
-        self.go.configure(text="Crear port" if n == 1 else "Crear %d ports" % n if n else "Crear ports")
+        self.go.configure(text="Generar APK" if n == 1 else "Generar %d APKs" % n if n else "Generar APKs")
 
     def add_paths(self, paths_):
+        if self.busy:
+            return
         jars = jar_paths(paths_)
         if not jars:
             messagebox.showwarning("j2a", "Solo se pueden añadir archivos .jar.")
@@ -423,10 +457,18 @@ class App(BaseTk):
 
     def update_options_label(self):
         changed = ["%s: %s" % (self.vars[k + "#label"], self.vars[k].get().split(" (")[0])
-                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "fps_mode", "fps", "keypad")
+                   for k in ("mode", "screen", "orientation", "rotate", "scale", "shader", "effect", "fps_mode", "fps", "keypad")
                    if self.vars[k].get() != self.vars[k + "#default"]]
         summary = "todo automático" if not changed else ", ".join(changed)
         self.opts_btn.configure(text=("▾ " if self.opts_open.get() else "▸ ") + "Opciones: " + summary)
+
+    def apply_preset(self, scaler, effect, scale):
+        if self.busy:
+            return
+        for key, value in (("shader", scaler), ("effect", effect), ("scale", scale)):
+            options = self.vars[key + "#opts"]
+            self.vars[key].set(next(label for label, v in options.items() if v == value))
+        self.update_options_label()
 
     def toggle_log(self, show=None):
         show = not self.log.winfo_ismapped() if show is None else show
@@ -460,6 +502,8 @@ class App(BaseTk):
 
     # --------------------------------------------------------------- actions
     def port(self):
+        if self.busy:
+            return
         if not self.games:
             self.add_games()
             return
@@ -469,12 +513,20 @@ class App(BaseTk):
         root = self.out_root()
         v = {k: self.value(k) for k in ("mode", "screen", "orientation", "shader", "fps_mode", "fps",
                                         "keypad", "shaders", "rotate", "scale")}
+        effect = self.value("effect")
+        if effect:
+            v["shader"] += "+" + effect
+        v["apk"] = self.vars["apk"].get()
+        folders = [os.path.normcase(os.path.abspath(g.out(root))) for g in self.games.values()]
+        if len(set(folders)) != len(folders):
+            messagebox.showwarning("Carpetas repetidas", "Dos juegos usan la misma carpeta. Cambia la carpeta de uno con doble clic.")
+            return
         existing = [g for g in self.games.values() if os.path.isdir(g.out(root)) and os.listdir(g.out(root))]
         replace = False
         if existing:
             replace = messagebox.askyesnocancel("j2a", "%s ya tiene%s proyecto en su carpeta.\n\n"
                                                 "Sí: reemplazarlo (se pierden los cambios que le hiciste)\n"
-                                                "No: dejarlo como está y crear solo los demás" % (
+                                                "No: conservarlo y compilar su APK con sus ajustes actuales" % (
                                                     ", ".join(g.name or g.auto_name for g in existing),
                                                     "n" if len(existing) > 1 else ""))
             if replace is None:
@@ -482,7 +534,9 @@ class App(BaseTk):
         jobs = []
         for g in self.games.values():
             if g in existing and not replace:
-                g.status = "Ya existe"
+                g.status = "En cola" if v["apk"] else "Ya existe"
+                if v["apk"]:
+                    jobs.append((g.jar, ["build", g.out(root)]))
                 continue
             g.status = "En cola"
             jobs.append((g.jar, build_args(dict(v, jar=g.jar, out=g.out(root), name=g.name, package=g.package,
@@ -495,7 +549,8 @@ class App(BaseTk):
     def open_out(self):
         sel = self.tree.selection() or tuple(self.games)
         outs = [self.games[j].out(self.out_root()) for j in sel if j in self.games]
-        p = next((o for o in outs if os.path.isdir(o)), None) or self.out_root()
+        p = next((os.path.join(o, "apk") for o in outs if os.path.isdir(os.path.join(o, "apk"))), None)
+        p = p or next((o for o in outs if os.path.isdir(o)), None) or self.out_root()
         if not p or not os.path.isdir(p):
             messagebox.showinfo("j2a", "Todavía no hay carpeta: crea el port primero.")
             return
@@ -511,21 +566,30 @@ class App(BaseTk):
         jobs = [j if isinstance(j, tuple) else (None, j) for j in jobs]
         self.busy = True
         self.go.state(["disabled"])
+        self.progress.start(12)
+        self.locked_controls = []
+        for widget in self.descendants(self):
+            if isinstance(widget, (ttk.Button, ttk.Combobox, ttk.Entry, ttk.Checkbutton, ttk.Radiobutton)):
+                if widget is self.log_btn or (isinstance(widget, ttk.Button) and widget.cget("text") == "Abrir carpeta"):
+                    continue
+                if not widget.instate(["disabled"]):
+                    self.locked_controls.append(widget)
+                    widget.state(["disabled"])
 
         def work():
             failed = 0
             for i, (jar, argv) in enumerate(jobs, 1):
                 if jar:
-                    self.q.put(("status", jar, "Creando…"))
+                    self.q.put(("status", jar, "Compilando…" if "--apk" in argv or argv[0] == "build" else "Generando…"))
                     self.q.put(("line", "Creando %d de %d: %s" % (i, len(jobs), self.games[jar].name
                                                                    or self.games[jar].auto_name)))
                 self.q.put("\n$ j2a " + " ".join(argv) + "\n")
                 ok = run_one(argv, self.q)
                 failed += not ok
                 if jar:
-                    self.q.put(("status", jar, "Listo" if ok else "Falló"))
+                    self.q.put(("status", jar, ("APK lista" if "--apk" in argv or argv[0] == "build" else "Proyecto listo") if ok else "Falló"))
             n = len(jobs)
-            self.q.put(("done", failed, ("Listo: %d port%s creado%s." % (n, "s" * (n > 1), "s" * (n > 1))
+            self.q.put(("done", failed, ("Listo: %d trabajo(s). APKs en la carpeta apk de cada proyecto." % n
                                          if not failed else "%d de %d fallaron: mira los detalles." % (failed, n))
                         if jobs[0][0] else ""))
 
@@ -547,6 +611,9 @@ class App(BaseTk):
                 else:  # done
                     _, failed, text = item
                     self.busy = False
+                    self.progress.stop()
+                    for widget in self.locked_controls:
+                        widget.state(["!disabled"])
                     self.go.state(["!disabled"])
                     self.status.set(text)
                     if failed or not text:

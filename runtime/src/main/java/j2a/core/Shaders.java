@@ -77,13 +77,13 @@ public final class Shaders {
                     + "  vec2 px = u_texelDelta / u_pixelDelta;\n"
                     + "  vec2 d = abs(fract(texel) - 0.5) * 2.0;\n"
                     + "  vec2 edge = smoothstep(1.0 - 1.6 / px, vec2(1.0), d);\n"
-                    + "  vec3 c = texture2D(sampler0, (floor(texel) + 0.5) * u_texelDelta).rgb;\n"
+                    + "  vec3 c = texture2D(sampler0, v_texcoord0).rgb;\n"
                     + "  gl_FragColor = vec4(c * (1.0 - 0.28 * max(edge.x, edge.y)), 1.0);\n"
                     + "}"},
             {"mono", "LCD verde (teléfono monocromo)", "0", "e",
                     "void main() {\n"
                     + "  vec2 texel = v_texcoord0 / u_texelDelta;\n"
-                    + "  vec3 c = texture2D(sampler0, (floor(texel) + 0.5) * u_texelDelta).rgb;\n"
+                    + "  vec3 c = texture2D(sampler0, v_texcoord0).rgb;\n"
                     + "  float l = dot(c, vec3(0.299, 0.587, 0.114));\n"
                     + "  vec3 g = mix(vec3(0.10, 0.19, 0.10), vec3(0.66, 0.76, 0.42), l);\n"
                     + "  vec2 d = abs(fract(texel) - 0.5) * 2.0;\n"
