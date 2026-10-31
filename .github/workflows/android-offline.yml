@@ -54,7 +54,7 @@ jobs:
             adb install android-offline/converter/build/outputs/apk/debug/converter-debug.apk
             adb install android-offline/converter/build/outputs/apk/androidTest/debug/converter-debug-androidTest.apk
             adb shell svc wifi disable
-            adb shell svc data disable
+            adb shell svc data disable || true
             adb shell am instrument -w com.zenithuzu.j2a.offline.test/j2a.offline.OfflineSmoke > smoke-result.txt
             cat smoke-result.txt
             grep J2A_OFFLINE_SUCCESS smoke-result.txt
@@ -73,3 +73,4 @@ jobs:
             smoke-result.txt
             android-crashes.txt
           if-no-files-found: warn
+
